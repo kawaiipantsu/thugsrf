@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/identity.png" alt="THUGS(red) RF — capture, analyze, replay, research" width="100%"></p>
+<p align="center"><img src="assets/banner.png" alt="THUGS(red) RF — capture, analyze, replay, research" width="100%"></p>
 
 # THUGS(red) RF
 
@@ -127,4 +127,4 @@ OpenAI uses the [Responses API](https://platform.openai.com/docs/api-reference/r
 
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honored. All settings can be edited in the TUI. `thugsrf config` prints the current configuration. Use `--device rtl` or `--device audio` to apply an appropriate default rate without changing persisted settings; changing device through Settings or `config set` resets its sample rate to a suitable default. When editing TOML manually, change device and rate together.
 
-See [architecture and limits](docs/ARCHITECTURE.md), [addon development](docs/ADDONS.md), and [verification](docs/VERIFICATION.md). This is an initial working release with explicitly bounded analysis, not a universal protocol decoder. The original supplied graphics identity is preserved at `assets/identity.png`; the terminal adapts its red/black palette and wordmark.
+See [architecture and limits](docs/ARCHITECTURE.md), [addon development](docs/ADDONS.md), and [verification](docs/VERIFICATION.md). This is an initial working release with explicitly bounded analysis, not a universal protocol decoder. The GitHub banner uses the top section of the supplied artwork. The four lower logo variants are available separately in [the branding assets](assets/README.md), alongside the preserved original identity sheet; the terminal adapts its red/black palette and wordmark.
