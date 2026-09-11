@@ -75,7 +75,9 @@ The UI fits **80 × 24**, expands with the terminal, and adds a receiver sidebar
 | r | Prepare a finite recording command |
 | : | Run a CLI command in the workbench |
 | ↑↓, Enter | Select/edit settings or toggle a reviewed addon |
-| PgUp / PgDn | Scroll workbench output |
+| ← / → (Spectrum) | Fine tune down/up; default 500 kHz |
+| ↑ / ↓ or PgUp / PgDn (Spectrum) | Coarse tune up/down; default 10 MHz |
+| PgUp / PgDn (other panels) | Scroll output |
 | ? / q | Help / quit |
 
 If HackRF exits before delivering any samples with a one-second USB transfer timeout, live reception retries up to three attempts. Other errors and failures after reception starts are shown in full in the Workbench; Space retries manually.
@@ -89,6 +91,8 @@ The command bar supports quoted paths. Jobs execute off the UI thread and stop l
 **8 Listen:** AM, narrow FM and mono broadcast FM audio, with SW and upper-MW tuning presets. **9 VHF/UHF:** editable RX/TX channel directory, CTCSS TX tones and explicitly confirmed finite microphone transmission. Start listening with Space. [Controls and hardware limits](docs/RADIO.md).
 
 **Frequency OSINT:** import saved Danish HTML tables or CSV lists, then press **l** to look up the current frequency. Entries retain source, region and import date. Includes official US/European source links and a small US allocation starter set. [DKScan, FCC/NTIA and EFIS workflow](docs/FREQUENCIES.md).
+
+[Full GitHub Wiki manual](https://github.com/kawaiipantsu/thugsrf/wiki): installation, controls, configuration, investigation guides, examples, screenshots and complete command help.
 
 ## Hardware and capture
 
@@ -109,7 +113,7 @@ thugsrf scan --start 433000000 --end 435000000 --step 1000000 --seconds 1
 | ALSA sound card | S16 mono capture / WAV files | Live audio spectrum, recording, WAV playback, AFSK generation |
 | Demo | Synthetic complex samples | UI exploration without hardware |
 
-Rates and frequencies are in **Hz**, gains in dB (the `rtl_gain` setting uses tenths of a dB). Hardware limits still depend on the tuner, USB controller and firmware. HackRF's RF amplifier remains off by default. Its 8–20 MS/s operating range follows [HackRF's sampling/filter guidance](https://hackrf.readthedocs.io/en/stable/sampling_rate.html). The NESDR SMArTee has a powered bias tee: use compatible antennas/accessories.
+Rates are in **Hz**; the global frequency option also accepts units such as `145.252MHz`, gains in dB (the `rtl_gain` setting uses tenths of a dB). Hardware limits still depend on the tuner, USB controller and firmware. HackRF's RF amplifier remains off by default. Its 8–20 MS/s operating range follows [HackRF's sampling/filter guidance](https://hackrf.readthedocs.io/en/stable/sampling_rate.html). The NESDR SMArTee has a powered bias tee: use compatible antennas/accessories.
 
 Recordings never silently overwrite files. RF recordings receive a SigMF-style `.sigmf-meta` sidecar; the raw recording retains your chosen filename. Audio recordings receive a `.wav.json` metadata sidecar, described in `docs/ARCHITECTURE.md`. A finite scan retains each capture and stores its report. Scan steps are center frequencies; overlapping captures are expected when the step is smaller than sample rate.
 
@@ -198,3 +202,5 @@ OpenAI uses the [Responses API](https://platform.openai.com/docs/api-reference/r
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honored. All settings can be edited in the TUI. `thugsrf config` prints the current configuration. Use `--device rtl` or `--device audio` to apply an appropriate default rate without changing persisted settings; changing device through Settings or `config set` resets its sample rate to a suitable default. When editing TOML manually, change device and rate together.
 
 See [architecture and limits](docs/ARCHITECTURE.md), [addon development](docs/ADDONS.md), and [verification](docs/VERIFICATION.md). This is an initial working release with explicitly bounded analysis, not a universal protocol decoder. The GitHub banner uses the top section of the supplied artwork. The four lower logo variants are available separately in [the branding assets](assets/README.md), alongside the preserved original identity sheet; the terminal adapts its red/black palette and wordmark.
+
+Spectrum tuning steps are configurable as `fine_tune_hz` and `coarse_tune_hz` in Settings. Frequency and tuning-step edits accept `443mhz`, `145.252MHz`, `500 kHz`, or bare integer Hz; the CLI `--frequency` accepts the same notation. Keyboard tuning changes the current session; Settings saves startup defaults. Live tuning briefly restarts reception and clears the old waterfall; stopped reception stays stopped.

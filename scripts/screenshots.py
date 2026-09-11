@@ -28,6 +28,7 @@ with tempfile.TemporaryDirectory(prefix='thugsrf-screenshots-') as temp:
         ('spectrum-wide', '170x50', ['tui', '--demo'], True, None),
         ('spectrum-compact', '80x24', ['tui', '--demo'], True, None),
         ('cli-help', '100x44', ['--help'], False, None),
+        ('settings-wide','170x50',['tui'],False,'5'),
         ('addons-wide','170x50',['tui'],False,'4'),
         ('listen-wide','170x50',['tui'],False,'8'),
         ('vhf-uhf-wide','170x50',['tui'],False,'9'),

@@ -7,6 +7,8 @@ use std::{fs, path::PathBuf};
 pub struct Config {
     pub device: String,
     pub frequency: u64,
+    pub fine_tune_hz: u64,
+    pub coarse_tune_hz: u64,
     pub sample_rate: u32,
     pub lna_gain: u32,
     pub vga_gain: u32,
@@ -30,6 +32,8 @@ impl Default for Config {
         Self {
             device: "hackrf".into(),
             frequency: 433_920_000,
+            fine_tune_hz: 500_000,
+            coarse_tune_hz: 10_000_000,
             sample_rate: 8_000_000,
             lna_gain: 16,
             vga_gain: 20,
@@ -90,6 +94,11 @@ impl Config {
         Ok(c)
     }
     pub fn validate(&self) -> Result<()> {
+        ensure!(
+            (1..=6_000_000_000).contains(&self.fine_tune_hz)
+                && (1..=6_000_000_000).contains(&self.coarse_tune_hz),
+            "tuning steps must be 1 Hz..6 GHz"
+        );
         ensure!(
             self.sweep_start_mhz >= 1
                 && self.sweep_start_mhz < self.sweep_end_mhz
@@ -189,6 +198,11 @@ impl Config {
         let mut t = toml::Value::try_from(self.clone())?;
         let old = t.get(key).context("unknown setting")?;
         t[key] = match old {
+            toml::Value::Integer(_)
+                if ["frequency", "fine_tune_hz", "coarse_tune_hz"].contains(&key) =>
+            {
+                toml::Value::Integer(parse_frequency(value)?.try_into()?)
+            }
             toml::Value::Integer(_) => toml::Value::Integer(value.parse()?),
             toml::Value::Float(_) => toml::Value::Float(value.parse()?),
             _ => toml::Value::String(value.into()),
@@ -197,5 +211,88 @@ impl Config {
         next.validate()?;
         *self = next;
         Ok(())
+    }
+}
+
+/// Parse decimal frequencies exactly, without floating-point rounding.
+pub fn parse_frequency(input: &str) -> Result<u64> {
+    let text = input.trim().to_ascii_lowercase();
+    let (number, scale) = [
+        ("ghz", 1_000_000_000_u64),
+        ("mhz", 1_000_000),
+        ("khz", 1000),
+        ("hz", 1),
+    ]
+    .into_iter()
+    .find_map(|(suffix, scale)| text.strip_suffix(suffix).map(|n| (n.trim(), scale)))
+    .unwrap_or((text.as_str(), 1));
+    let (whole, fraction) = number.split_once('.').unwrap_or((number, ""));
+    ensure!(
+        !whole.is_empty()
+            && whole.bytes().all(|b| b.is_ascii_digit())
+            && fraction.bytes().all(|b| b.is_ascii_digit()),
+        "enter a frequency such as 443mhz, 145.252MHz, 500 kHz or integer Hz"
+    );
+    let fraction = fraction.trim_end_matches('0');
+    let divisor = 10_u64
+        .checked_pow(fraction.len().try_into()?)
+        .context("frequency precision is too large")?;
+    let fractional = if fraction.is_empty() {
+        0
+    } else {
+        fraction.parse::<u64>()?
+    };
+    let scaled = fractional
+        .checked_mul(scale)
+        .context("frequency overflow")?;
+    ensure!(scaled % divisor == 0, "frequency must resolve to whole Hz");
+    whole
+        .parse::<u64>()?
+        .checked_mul(scale)
+        .and_then(|v| v.checked_add(scaled / divisor))
+        .context("frequency overflow")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn frequency_units_and_precision() {
+        for (s, hz) in [
+            ("443mhz", 443000000),
+            ("145.252Mhz", 145252000),
+            (" 500 kHz ", 500000),
+            ("6GHz", 6000000000),
+            ("433920000", 433920000),
+            ("0.000001MHz", 1),
+            ("1.00000000000000000000Hz", 1),
+        ] {
+            assert_eq!(parse_frequency(s).unwrap(), hz);
+        }
+        for s in [
+            "",
+            "-1MHz",
+            "NaN",
+            "1.1Hz",
+            "1.2.3MHz",
+            "18446744073709551615GHz",
+            "1e6",
+        ] {
+            assert!(parse_frequency(s).is_err(), "{s}");
+        }
+    }
+    #[test]
+    fn settings_validate_atomically_and_default_old_configs() {
+        let mut c: Config = toml::from_str("frequency = 433920000").unwrap();
+        assert_eq!(c.fine_tune_hz, 500000);
+        assert_eq!(c.coarse_tune_hz, 10000000);
+        c.set("frequency", "145.252Mhz").unwrap();
+        c.set("fine_tune_hz", "12.5kHz").unwrap();
+        assert_eq!(c.frequency, 145252000);
+        assert_eq!(c.fine_tune_hz, 12500);
+        assert!(c.set("frequency", "7GHz").is_err());
+        assert_eq!(c.frequency, 145252000);
+        assert!(c.set("fine_tune_hz", "0Hz").is_err());
+        assert_eq!(c.fine_tune_hz, 12500);
     }
 }

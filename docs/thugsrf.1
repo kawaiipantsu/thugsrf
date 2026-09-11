@@ -1,4 +1,4 @@
-.TH THUGSRF 1 "September 2026" "THUGS(red) RF 0.2.0"
+.TH THUGSRF 1 "September 2026" "THUGS(red) RF 0.2.1"
 .SH NAME
 thugsrf \- modular radio signal intelligence workbench
 .SH SYNOPSIS
@@ -70,6 +70,12 @@ Sync factual SigID Wiki metadata and rank reference candidates offline.
 Import sourced HTML/CSV frequency references and look up channel hints.
 .PP
 TUI tab 7 provides a sequential 1 MHz to 6 GHz HackRF sweep panorama.
+.SH SPECTRUM TUNING
+Left/Right tunes by fine_tune_hz (default 500 kHz).
+Up/Down and Page Up/Page Down tune by coarse_tune_hz (default 10 MHz).
+Edit both steps in Settings. Frequency and step values accept units such as
+145.252MHz or 500kHz; bare integers mean Hz. The global --frequency option
+also accepts these units. Keyboard tuning is session-only.
 .SH FILES
 ~/.config/thugsrf/config.toml
 .br

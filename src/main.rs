@@ -20,12 +20,12 @@ use std::path::PathBuf;
     version,
     author = "Kawaiipantsu · THUGS(red)",
     about = "THUGS(red) RF — radio signal intelligence workbench",
-    after_help = "Run without a command for the TUI. All frequencies and sample rates are in Hz."
+    after_help = "Run without a command for the TUI. Frequencies accept Hz, kHz, MHz or GHz; sample rates are in Hz."
 )]
 pub struct Cli {
     #[arg(long, global = true)]
     device: Option<String>,
-    #[arg(long, global = true)]
+    #[arg(long, global = true, value_parser = config::parse_frequency)]
     frequency: Option<u64>,
     #[arg(long, global = true)]
     sample_rate: Option<u32>,

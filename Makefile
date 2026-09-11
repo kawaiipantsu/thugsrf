@@ -24,6 +24,7 @@ test: build
 	$(CARGO) test --locked
 	python3 scripts/smoke.py
 	python3 scripts/tui-smoke.py
+	python3 scripts/tuning-smoke.py
 	python3 scripts/receiver-smoke.py
 	python3 scripts/ai-smoke.py
 	/usr/bin/python3 scripts/protocol-smoke.py

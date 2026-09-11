@@ -354,6 +354,22 @@ pub fn run(c: Config) -> Result<()> {
                             .display()
                     ));
                 }
+                key @ (KeyCode::Left
+                | KeyCode::Right
+                | KeyCode::Up
+                | KeyCode::Down
+                | KeyCode::PageUp
+                | KeyCode::PageDown)
+                    if a.tab == 0 =>
+                {
+                    let step = if matches!(key, KeyCode::Left | KeyCode::Right) {
+                        a.c.fine_tune_hz
+                    } else {
+                        a.c.coarse_tune_hz
+                    };
+                    let increase = matches!(key, KeyCode::Right | KeyCode::Up | KeyCode::PageUp);
+                    tune_spectrum(&mut a, step, increase);
+                }
                 KeyCode::Down => {
                     a.selected = a.selected.saturating_add(1);
                     a.scroll = a.scroll.saturating_add(1);
@@ -458,6 +474,53 @@ pub fn run(c: Config) -> Result<()> {
     }
     Ok(())
 }
+fn tune_spectrum(a: &mut App, step: u64, increase: bool) {
+    if a.busy || a.audio.is_some() || a.survey.is_some() {
+        a.status = "Stop the active job, listening or survey before tuning Spectrum".into();
+        return;
+    }
+    if a.c.device == "audio" {
+        a.status = "Audio input has no RF tuning frequency".into();
+        return;
+    }
+    let mut next = a.c.clone();
+    let frequency = if increase {
+        next.frequency.checked_add(step)
+    } else {
+        next.frequency.checked_sub(step)
+    };
+    let Some(frequency) = frequency else {
+        a.status = "Tuning would exceed the frequency range".into();
+        return;
+    };
+    next.frequency = frequency;
+    if let Err(e) = next.validate() {
+        a.status = e.to_string();
+        return;
+    }
+    // Drop joins the old receiver before a replacement opens the USB device.
+    let running = a.stream.is_some();
+    a.stream = None;
+    a.c = next;
+    a.report = None;
+    a.water.clear();
+    a.status = format!(
+        "Tuned {:.6} MHz · {}",
+        frequency as f64 / 1e6,
+        if running {
+            "restarting RX"
+        } else {
+            "Space starts RX"
+        }
+    );
+    if running {
+        match Stream::start(a.c.clone()) {
+            Ok(stream) => a.stream = Some(stream),
+            Err(e) => a.status = e.to_string(),
+        }
+    }
+}
+
 fn run_command(a: &mut App, text: String) {
     if a.busy {
         a.status = "A job is already running".into();
@@ -684,9 +747,11 @@ fn draw(f: &mut Frame, a: &App) {
         rows[3],
     );
     f.render_widget(
-        Paragraph::new(
-            " Space RX  p freeze  s save  r record  : command  Tab panels  ? help  q quit",
-        )
+        Paragraph::new(if a.tab == 0 {
+            " ←→ fine  ↑↓/Pg coarse  Space RX  : command  Tab panels  ? help  q quit"
+        } else {
+            " Space RX  p freeze  s save  r record  : command  Tab panels  ? help  q quit"
+        })
         .style(Style::default().fg(MUTED)),
         rows[4],
     );
@@ -814,7 +879,7 @@ fn settings(c: &Config) -> Vec<(String, String)> {
         .collect()
 }
 fn help() -> &'static str {
-    "THUGS(red) RF · Kawaiipantsu · https://thugs.red\n\nSpace starts/stops RX. Demo is explicitly synthetic.\nTab / 1–9 switch panels. 7 Survey, 8 Listen, 9 VHF/UHF. s saves current spectrum to SQLite.\nSettings: ↑↓ and Enter to edit any field. Esc cancels edits.\nAddons: ↑↓ and Enter to enable a reviewed addon.\nr prepares a five-second recording; Enter starts it.\n: opens the command bar; commands run on a worker thread.\nRX stops before jobs so hardware is not opened twice.\n\nExample commands (paths containing spaces need quotes):\n  doctor\n  addon install\n  addon enable all --kind identifiers\n  identify /tmp/signal.cs8\n  frequency sources\n  frequency lookup --frequency 145600000\n  record /tmp/signal.cs8 --seconds 5\n  analyze /tmp/signal.cs8 --png /tmp/spectrum.png\n  decode /tmp/signal.cs8 --mode ook\n  addon run rtl433 /tmp/signal.cs8\n  demod /tmp/signal.cs8 /tmp/audio.wav --mode fm\n  play /tmp/audio.wav\n  encode /tmp/test.wav --bits 10110010 --mode afsk\n  ai --input /tmp/audio.wav --format wav\n  ai --image /tmp/spectrum.png\n  history\n\nAI: set ai_provider, ai_model and local_url in Settings.\nKeys: OPENAI_API_KEY / ANTHROPIC_API_KEY / THUGSRF_LOCAL_API_KEY.\nAI receives measured features for WAV/IQ, or supplied images.\nAI output is a hypothesis. Audio waveforms are not sent directly.\n\nRF replay uses signed 8-bit IQ and requires --confirm-tx.\nAudio playback uses your selected ALSA device.\nUse --help on any command for options.\n"
+    "THUGS(red) RF · Kawaiipantsu · https://thugs.red\n\nSpace starts/stops RX. Demo is explicitly synthetic.\nSpectrum: ←/→ fine tune (500 kHz); ↑/↓ or PgUp/PgDn coarse (10 MHz).\nSettings: fine_tune_hz / coarse_tune_hz change steps; frequency accepts 145.252MHz.\nKeyboard tuning is session-only; Settings saves defaults.\nTab / 1–9 switch panels. 7 Survey, 8 Listen, 9 VHF/UHF. s saves current spectrum to SQLite.\nSettings: ↑↓ and Enter to edit any field. Esc cancels edits.\nAddons: ↑↓ and Enter to enable a reviewed addon.\nr prepares a five-second recording; Enter starts it.\n: opens the command bar; commands run on a worker thread.\nRX stops before jobs so hardware is not opened twice.\n\nExample commands (paths containing spaces need quotes):\n  doctor\n  addon install\n  addon enable all --kind identifiers\n  identify /tmp/signal.cs8\n  frequency sources\n  frequency lookup --frequency 145600000\n  record /tmp/signal.cs8 --seconds 5\n  analyze /tmp/signal.cs8 --png /tmp/spectrum.png\n  decode /tmp/signal.cs8 --mode ook\n  addon run rtl433 /tmp/signal.cs8\n  demod /tmp/signal.cs8 /tmp/audio.wav --mode fm\n  play /tmp/audio.wav\n  encode /tmp/test.wav --bits 10110010 --mode afsk\n  ai --input /tmp/audio.wav --format wav\n  ai --image /tmp/spectrum.png\n  history\n\nAI: set ai_provider, ai_model and local_url in Settings.\nKeys: OPENAI_API_KEY / ANTHROPIC_API_KEY / THUGSRF_LOCAL_API_KEY.\nAI receives measured features for WAV/IQ, or supplied images.\nAI output is a hypothesis. Audio waveforms are not sent directly.\n\nRF replay uses signed 8-bit IQ and requires --confirm-tx.\nAudio playback uses your selected ALSA device.\nUse --help on any command for options.\n"
 }
 fn survey_view(f: &mut Frame, area: Rect, a: &App) {
     let parts = Layout::vertical([Constraint::Length(3), Constraint::Min(5)]).split(area);
