@@ -28,6 +28,25 @@ Debian packages are built for the native architecture and target Debian 13 / Ubu
 
 ## Terminal workbench
 
+Actual xterm screenshots of the running application. The spectrum views use the built-in **synthetic demo**, without opening a radio.
+
+**170 × 50 — spectrum, waterfall, and receiver sidebar**
+
+[![THUGS(red) RF running in a 170 by 50 terminal with a braille spectrum, color waterfall, and receiver sidebar](assets/screenshots/spectrum-wide.png)](assets/screenshots/spectrum-wide.png)
+
+<details>
+<summary>See the compact 80 × 24 layout and CLI commands</summary>
+
+**80 × 24 — compact spectrum and waterfall**
+
+![THUGS(red) RF running in an 80 by 24 terminal](assets/screenshots/spectrum-compact.png)
+
+**Command-line interface — `thugsrf --help`**
+
+![THUGS(red) RF command-line help in a terminal](assets/screenshots/cli-help.png)
+
+</details>
+
 The UI fits **80 × 24**, expands with the terminal, and adds a receiver sidebar at larger widths. **170 × 50** is recommended. It uses RGB color, box drawing, a braille spectrum, and two waterfall rows per terminal cell.
 
 | Key | Action |
