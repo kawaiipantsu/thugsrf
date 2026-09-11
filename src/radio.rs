@@ -94,8 +94,14 @@ impl Drop for ChildGuard {
         let _ = self.0.wait();
     }
 }
+/// Lifecycle messages use a separate channel so a full spectrum queue cannot hide errors.
+pub enum StreamEvent {
+    Status(String),
+    Failed(String),
+}
 pub struct Stream {
-    pub frames: Receiver<Result<Report>>,
+    pub frames: Receiver<Report>,
+    pub events: Receiver<StreamEvent>,
     stop: Arc<AtomicBool>,
     worker: Option<thread::JoinHandle<()>>,
 }
@@ -113,8 +119,10 @@ impl Stream {
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
         let (tx, frames) = mpsc::sync_channel(2);
-        if c.device == "demo" {
-            let worker = thread::spawn(move || {
+        let (events_tx, events) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            if c.device == "demo" {
+                let _ = events_tx.send(StreamEvent::Status("Receiving synthetic demo".into()));
                 let mut a = Analyzer::new(c.fft_size);
                 let mut tick = 0.0f32;
                 while !flag.load(Ordering::Relaxed) {
@@ -127,115 +135,190 @@ impl Stream {
                             ) + rustfft::num_complex::Complex32::from_polar(0.15, p * -230.0)
                         })
                         .collect();
-                    let _ = tx.try_send(Ok(a.analyze(
+                    let _ = tx.try_send(a.analyze(
                         &s,
                         c.sample_rate,
                         c.frequency,
                         c.threshold_db,
                         "DEMO · synthetic",
-                    )));
+                    ));
                     tick += 0.07;
                     thread::sleep(Duration::from_millis(60));
                 }
-            });
-            return Ok(Self {
-                frames,
-                stop,
-                worker: Some(worker),
-            });
-        }
-        let mut child = ChildGuard(
-            command(&c, "-", None)?
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .context("starting receiver; run thugsrf doctor")?,
-        );
-        let mut out = child.0.stdout.take().context("receiver stdout")?;
-        let mut err = child.0.stderr.take().context("receiver stderr")?;
-        let err_reader = thread::spawn(move || {
-            let mut tail = Vec::new();
-            let mut b = [0u8; 1024];
-            while let Ok(n) = err.read(&mut b) {
-                if n == 0 {
+                return;
+            }
+            let mut diagnostics = Vec::new();
+            for attempt in 1..=3 {
+                if flag.load(Ordering::Relaxed) {
+                    return;
+                }
+                let result = receive_attempt(&c, &flag, &tx, &events_tx);
+                if flag.load(Ordering::Relaxed) {
+                    return;
+                }
+                let retry = match result {
+                    Ok((had_data, detail)) => {
+                        let retry = c.device == "hackrf"
+                            && !had_data
+                            && detail.contains("Couldn't transfer any bytes for one second.");
+                        diagnostics.push(format!("Attempt {attempt}:\n{detail}"));
+                        retry
+                    }
+                    Err(e) => {
+                        diagnostics.push(format!("Attempt {attempt}: {e:#}"));
+                        false
+                    }
+                };
+                if !retry || attempt == 3 {
                     break;
                 }
-                tail.extend_from_slice(&b[..n]);
-                if tail.len() > 8192 {
-                    tail.drain(..tail.len() - 8192);
+                let _ = events_tx.send(StreamEvent::Status(format!(
+                    "HackRF delivered no startup data; retrying ({}/3)…",
+                    attempt + 1
+                )));
+                // Release the previous USB handle before retrying, while keeping Space/quit responsive.
+                for _ in 0..5 {
+                    if flag.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(100));
                 }
             }
-            String::from_utf8_lossy(&tail).into_owned()
-        });
-        // Dedicated pipe reader drains full hardware throughput. UI/DSP may drop blocks, never block USB.
-        let (raw_tx, raw_rx) = mpsc::sync_channel(2);
-        let block_bytes = (c.fft_size * 2).max(65536);
-        let reader = thread::spawn(move || {
-            loop {
-                let mut bytes = vec![0; block_bytes];
-                match out.read_exact(&mut bytes) {
-                    Ok(()) => {
-                        let _ = raw_tx.try_send(bytes);
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-        let worker = thread::spawn(move || {
-            let mut a = Analyzer::new(c.fft_size);
-            let mut last = Instant::now() - Duration::from_secs(1);
-            while !flag.load(Ordering::Relaxed) {
-                match raw_rx.recv_timeout(Duration::from_millis(100)) {
-                    Ok(bytes) => {
-                        if last.elapsed() < Duration::from_millis(60) {
-                            continue;
-                        }
-                        last = Instant::now();
-                        let s = if c.device == "audio" {
-                            bytes
-                                .as_chunks::<2>()
-                                .0
-                                .iter()
-                                .map(|p| {
-                                    rustfft::num_complex::Complex32::new(
-                                        i16::from_le_bytes([p[0], p[1]]) as f32 / 32768.0,
-                                        0.0,
-                                    )
-                                })
-                                .collect()
-                        } else {
-                            dsp::iq(&bytes, c.device == "rtl")
-                        };
-                        let _ = tx.try_send(Ok(a.analyze(
-                            &s,
-                            c.sample_rate,
-                            if c.device == "audio" { 0 } else { c.frequency },
-                            c.threshold_db,
-                            &c.device,
-                        )));
-                    }
-                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                    Err(mpsc::RecvTimeoutError::Timeout) => {
-                        if child.0.try_wait().ok().flatten().is_some() {
-                            break;
-                        }
-                    }
-                }
-            }
-            let _ = child.0.kill();
-            let _ = child.0.wait();
-            let _ = reader.join();
-            let err = err_reader.join().unwrap_or_default();
-            if !flag.load(Ordering::Relaxed) {
-                let _ = tx.try_send(Err(anyhow::anyhow!("Receiver stopped: {err}")));
-            }
+            let _ = events_tx.send(StreamEvent::Failed(diagnostics.join("\n\n")));
         });
         Ok(Self {
             frames,
+            events,
             stop,
             worker: Some(worker),
         })
     }
+}
+
+fn receive_attempt(
+    c: &Config,
+    stop: &AtomicBool,
+    frames: &mpsc::SyncSender<Report>,
+    events: &mpsc::Sender<StreamEvent>,
+) -> Result<(bool, String)> {
+    let mut child = ChildGuard(
+        command(c, "-", None)?
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("starting receiver; run thugsrf doctor")?,
+    );
+    let mut out = child.0.stdout.take().context("receiver stdout")?;
+    let mut err = child.0.stderr.take().context("receiver stderr")?;
+    let err_reader = thread::spawn(move || {
+        let mut tail = Vec::new();
+        let mut bytes = [0u8; 1024];
+        while let Ok(n) = err.read(&mut bytes) {
+            if n == 0 {
+                break;
+            }
+            tail.extend_from_slice(&bytes[..n]);
+            if tail.len() > 8192 {
+                tail.drain(..tail.len() - 8192);
+            }
+        }
+        String::from_utf8_lossy(&tail).into_owned()
+    });
+    // Always drain USB; drop display blocks when DSP/UI is slower than the radio.
+    let (raw_tx, raw_rx) = mpsc::sync_channel(2);
+    let block_bytes = (c.fft_size * 2).max(65536);
+    let seen_data = Arc::new(AtomicBool::new(false));
+    let reader_seen = seen_data.clone();
+    let reader = thread::spawn(move || -> std::io::Result<()> {
+        loop {
+            let mut bytes = vec![0; block_bytes];
+            let mut offset = 0;
+            while offset < bytes.len() {
+                match out.read(&mut bytes[offset..]) {
+                    Ok(0) => return Ok(()),
+                    Ok(n) => {
+                        reader_seen.store(true, Ordering::Relaxed);
+                        offset += n;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+            if let Err(mpsc::TrySendError::Disconnected(_)) = raw_tx.try_send(bytes) {
+                return Ok(());
+            }
+        }
+    });
+    let mut analyzer = Analyzer::new(c.fft_size);
+    let mut last = Instant::now() - Duration::from_secs(1);
+    let mut announced = false;
+    while !stop.load(Ordering::Relaxed) {
+        match raw_rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(bytes) => {
+                if !announced {
+                    let _ = events.send(StreamEvent::Status(format!(
+                        "Receiving {} · {:.3} MHz",
+                        c.device,
+                        c.frequency as f64 / 1e6
+                    )));
+                    announced = true;
+                }
+                if last.elapsed() < Duration::from_millis(60) {
+                    continue;
+                }
+                last = Instant::now();
+                let samples = if c.device == "audio" {
+                    bytes
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|p| {
+                            rustfft::num_complex::Complex32::new(
+                                i16::from_le_bytes(*p) as f32 / 32768.0,
+                                0.0,
+                            )
+                        })
+                        .collect()
+                } else {
+                    dsp::iq(&bytes, c.device == "rtl")
+                };
+                let _ = frames.try_send(analyzer.analyze(
+                    &samples,
+                    c.sample_rate,
+                    if c.device == "audio" { 0 } else { c.frequency },
+                    c.threshold_db,
+                    &c.device,
+                ));
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if child.0.try_wait().ok().flatten().is_some() {
+                    break;
+                }
+            }
+        }
+    }
+    // stdout EOF can race with process exit; allow a short grace period for final diagnostics.
+    let deadline = Instant::now() + Duration::from_millis(250);
+    let status = loop {
+        if let Some(status) = child.0.try_wait()? {
+            break status;
+        }
+        if stop.load(Ordering::Relaxed) || Instant::now() >= deadline {
+            let _ = child.0.kill();
+            break child.0.wait()?;
+        }
+        thread::sleep(Duration::from_millis(10));
+    };
+    let read_result = reader.join();
+    let mut detail = format!(
+        "Receiver exited with {status}\n{}",
+        err_reader.join().unwrap_or_default()
+    );
+    if let Ok(Err(e)) = read_result {
+        detail.push_str(&format!("\nReading receiver output failed: {e}"));
+    }
+    Ok((seen_data.load(Ordering::Relaxed), detail))
 }
 pub fn capture(c: &Config, path: &Path, seconds: u32) -> Result<String> {
     ensure!(

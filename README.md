@@ -16,8 +16,8 @@ make toolchain                   # official rustup installer / pinned stable com
 make build
 make check
 make test
-make deb                         # dist/thugsrf_0.1.0_<arch>.deb
-sudo apt install ./dist/thugsrf_0.1.0_amd64.deb
+make deb                         # dist/thugsrf_0.1.1_<arch>.deb
+sudo apt install ./dist/thugsrf_0.1.1_amd64.deb
 thugsrf doctor
 thugsrf
 ```
@@ -60,6 +60,8 @@ The UI fits **80 × 24**, expands with the terminal, and adds a receiver sidebar
 | ↑↓, Enter | Select/edit settings or toggle a reviewed addon |
 | PgUp / PgDn | Scroll workbench output |
 | ? / q | Help / quit |
+
+If HackRF exits before delivering any samples with a one-second USB transfer timeout, live reception retries up to three attempts. Other errors and failures after reception starts are shown in full in the Workbench; Space retries manually.
 
 The command bar supports quoted paths. Jobs execute off the UI thread and stop live reception first to release the radio. The TUI never starts RF transmission on launch. `replay` needs `--confirm-tx` on every invocation.
 

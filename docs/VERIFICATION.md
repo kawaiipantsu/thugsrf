@@ -35,3 +35,9 @@ The smoke recordings stayed in temporary local directories and were removed afte
 - rtl_433: the real installed offline decoder was exercised on a synthetic IQ fixture. A supported real sensor packet was not present, so successful over-the-air protocol recovery is not claimed.
 
 This verification does not assert universal protocol recognition, calibrated signal levels, lossless real-time analysis at every sample rate, or compatibility with every Linux distribution.
+
+## 0.1.1 receiver fix
+
+On 2026-09-11, a direct HackRF test reproduced an intermittent startup failure: `Couldn't transfer any bytes for one second.` The first of three attempts failed, and the next two delivered samples. The two-line TUI status previously hid this diagnostic beneath the startup messages.
+
+The live receiver now retries only that specific failure before any data has arrived, up to three attempts, and displays final errors with exit status in the Workbench. `scripts/receiver-smoke.py` tests recovery, exhaustion, busy-device failure and failure after samples arrive using a fake child process in an actual PTY. Three successive physical HackRF start/save/stop cycles also passed. No firmware change was made; this release handles the observed transient startup condition rather than claiming its underlying USB/firmware cause has been eliminated.

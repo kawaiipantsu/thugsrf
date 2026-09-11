@@ -1,13 +1,13 @@
-THUGS(red) RF 0.1.0 introduces a native Linux radio investigation workbench by Kawaiipantsu from THUGS(red).
+THUGS(red) RF 0.1.1 fixes live HackRF startup recovery and receiver diagnostics.
 
-- Rust 1.98.1 / edition 2024; full Makefile build and Debian package.
-- Responsive RGB TUI with braille spectrum, block waterfall, detection, recording, addon and settings panels.
-- HackRF reception and finite replay; RTL-SDR reception; ALSA audio capture/playback.
-- IQ/WAV analysis, OOK pulse extraction, FSK discriminator, basic AM/FM demodulation and OOK/AFSK generation.
-- Executable JSON addons, including an offline rtl_433 adapter and frequency-context identifier.
-- SQLite investigation history and JSON export.
-- Explicit OpenAI, Anthropic and local-model requests for measured features and spectrum images.
+Some HackRF starts configured the radio but delivered no USB samples for one second, causing hackrf_transfer to exit. The previous TUI displayed only the first two startup lines and hid the actual failure.
 
-Verified with the connected HackRF One: full-size passive capture, live TUI reception and persisted analysis. Audio capture, synthetic protocol/DSP tests, local AI HTTP contract, terminal layouts, and Debian packaging passed. See docs/VERIFICATION.md for limits. NESDR hardware, physical RF transmission and cloud inference were not exercised.
+- Retry this specific empty-startup failure up to three total attempts, releasing the previous process/USB handle and waiting 500 ms between attempts.
+- Stop retries when the user stops reception; never retry busy-device errors or failures after samples have arrived.
+- Show full receiver stderr and exit status in the scrollable Workbench on final failure.
+- Keep lifecycle diagnostics separate from the bounded spectrum queue so display backpressure cannot hide errors.
+- Include the correctly cropped banner/logos and real terminal screenshots in the documentation.
 
-Install the Debian package with `sudo apt install ./thugsrf_0.1.0_amd64.deb`, then run `thugsrf doctor` and `thugsrf`. Press Space to start reception. Bundled addon examples are installed under `/usr/share/thugsrf/addons`; copy the desired directories to `~/.config/thugsrf/` and enable them in the Addons panel.
+Regression tests exercise transient recovery, retry exhaustion, busy devices and mid-stream failure using a fake driver in the actual TUI. Physical HackRF reception was checked through three successive start/save/stop cycles. RF transmission and finite recording are never automatically retried.
+
+Install the updated package with `sudo apt install ./thugsrf_0.1.1_amd64.deb`, restart `thugsrf`, and press Space to receive.

@@ -92,17 +92,10 @@ pub fn run(c: Config) -> Result<()> {
     };
     while !crate::CANCELLED.load(Ordering::Relaxed) || a.busy {
         let mut disconnected = false;
+        let mut failure = None;
         if let Some(stream) = &a.stream {
             loop {
-                let frame = match stream.frames.try_recv() {
-                    Ok(r) => r,
-                    Err(mpsc::TryRecvError::Empty) => break,
-                    Err(mpsc::TryRecvError::Disconnected) => {
-                        disconnected = true;
-                        break;
-                    }
-                };
-                match frame {
+                match stream.frames.try_recv() {
                     Ok(r) => {
                         if !a.paused {
                             a.water.push_front(r.spectrum_dbfs.clone());
@@ -110,13 +103,31 @@ pub fn run(c: Config) -> Result<()> {
                             a.report = Some(r);
                         }
                     }
-                    Err(e) => a.status = e.to_string(),
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        disconnected = true;
+                        break;
+                    }
+                }
+            }
+            while let Ok(event) = stream.events.try_recv() {
+                match event {
+                    crate::radio::StreamEvent::Status(message) => a.status = message,
+                    crate::radio::StreamEvent::Failed(detail) => failure = Some(detail),
                 }
             }
         }
-        if disconnected {
+        if let Some(detail) = failure {
             a.stream = None;
-            a.status = format!("Receiver ended. {}", a.status);
+            a.status = "Receiver failed · full diagnostics below · Space retries".into();
+            a.output = format!(
+                "Receiver diagnostics\n\n{detail}\n\nCheck USB connection and whether another application is using the radio.\nPress Space to retry reception."
+            );
+            a.tab = 5;
+            a.scroll = 0;
+        } else if disconnected {
+            a.stream = None;
+            a.status = "Receiver ended · Space restarts reception".into();
         }
         while let Ok(s) = a.job.try_recv() {
             a.busy = false;
@@ -211,7 +222,7 @@ pub fn run(c: Config) -> Result<()> {
                                 a.water.clear();
                                 a.stream = Some(s);
                                 a.status = format!(
-                                    "Receiving {} · {:.3} MHz",
+                                    "Starting {} · {:.3} MHz",
                                     a.c.device,
                                     a.c.frequency as f64 / 1e6
                                 );
