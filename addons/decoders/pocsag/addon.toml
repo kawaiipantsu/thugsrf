@@ -1,0 +1,9 @@
+api_version = 1
+name = "pocsag"
+kind = "decoders"
+description = "POCSAG 512/1200/2400 pager messages"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "pocsag"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3", "multimon-ng"]

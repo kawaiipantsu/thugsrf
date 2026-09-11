@@ -1,0 +1,9 @@
+api_version = 1
+name = "selective-call"
+kind = "decoders"
+description = "DTMF / ZVEI / CCIR / EEA / EIA selective-calling tones"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "selective-call"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3", "multimon-ng"]

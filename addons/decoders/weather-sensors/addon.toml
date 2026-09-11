@@ -1,0 +1,9 @@
+api_version = 1
+name = "weather-sensors"
+kind = "decoders"
+description = "rtl_433 sensor messages from recorded IQ"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "weather-sensors"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8"]
+requires = ["/usr/bin/python3", "rtl_433"]

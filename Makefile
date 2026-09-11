@@ -26,6 +26,9 @@ test: build
 	python3 scripts/tui-smoke.py
 	python3 scripts/receiver-smoke.py
 	python3 scripts/ai-smoke.py
+	/usr/bin/python3 scripts/protocol-smoke.py
+	/usr/bin/python3 scripts/reference-smoke.py
+	/usr/bin/python3 scripts/audio-smoke.py
 fmt:
 	$(CARGO) fmt --all
 lint:
@@ -45,7 +48,7 @@ toolchain:
 	sh scripts/toolchain.sh
 deps:
 	sudo apt-get update
-	sudo apt-get install -y build-essential pkg-config curl ca-certificates dpkg-dev hackrf rtl-sdr rtl-433 alsa-utils python3
+	sudo apt-get install -y build-essential pkg-config curl ca-certificates dpkg-dev hackrf rtl-sdr rtl-433 alsa-utils python3 python3-numpy python3-scipy multimon-ng direwolf tshark
 addons:
 	python3 scripts/install-addons.py
 clean:
@@ -53,3 +56,8 @@ clean:
 help:
 	@echo 'build debug run demo check test fmt lint install deb deps toolchain addons clean'
 	@echo 'Overrides: CARGO=... PREFIX=/usr DESTDIR=/tmp/stage'
+
+.PHONY: protocol-deps
+protocol-deps:
+	sudo apt-get update
+	sudo apt-get install -y --no-install-recommends multimon-ng direwolf tshark satdump dsdcc gnss-sdr gr-gsm python3-numpy python3-scipy

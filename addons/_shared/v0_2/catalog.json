@@ -1,0 +1,397 @@
+{
+  "digital-bursts": {
+    "kind": "identifiers",
+    "description": "Energy-burst timing: packet-like activity with uncertainty",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "paging-id": {
+    "kind": "identifiers",
+    "description": "Paging allocation context: POCSAG / FLEX candidates",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "maritime-id": {
+    "kind": "identifiers",
+    "description": "AIS / DSC / marine ATIS channel context",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "aviation-atis-id": {
+    "kind": "identifiers",
+    "description": "Aviation AM / voice ATIS service context",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "cellular-id": {
+    "kind": "identifiers",
+    "description": "GSM 900 / 1800 allocation context",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "wifi-id": {
+    "kind": "identifiers",
+    "description": "Wi-Fi OFDM training candidates or actual PCAP metadata",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav",
+      "pcap",
+      "pcapng"
+    ],
+    "backend": "identify"
+  },
+  "bluetooth-id": {
+    "kind": "identifiers",
+    "description": "Bluetooth/BLE band context or actual packet metadata",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav",
+      "pcap",
+      "pcapng"
+    ],
+    "backend": "identify"
+  },
+  "hid-id": {
+    "kind": "identifiers",
+    "description": "Mouse / keyboard clues from Bluetooth HID UUIDs and device class",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav",
+      "pcap",
+      "pcapng"
+    ],
+    "backend": "identify"
+  },
+  "walkie-id": {
+    "kind": "identifiers",
+    "description": "VHF/UHF handheld / PMR446 context and CTCSS-tone candidates",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "weather-id": {
+    "kind": "identifiers",
+    "description": "Weather sensor and radiosonde allocation candidates",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "tv-id": {
+    "kind": "identifiers",
+    "description": "Terrestrial TV / DVB / DAB allocation candidates",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "satellite-id": {
+    "kind": "identifiers",
+    "description": "Satellite downlink candidates with source references",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "gnss-id": {
+    "kind": "identifiers",
+    "description": "GPS / Galileo GNSS frequency context",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "identify"
+  },
+  "encryption-id": {
+    "kind": "identifiers",
+    "description": "Explicit protection/encryption metadata; never guess from noise",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav",
+      "pcap",
+      "pcapng"
+    ],
+    "backend": "identify"
+  },
+  "morse-id": {
+    "kind": "identifiers",
+    "description": "Morse/CW mark timing and estimated speed",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "morse-id"
+  },
+  "pocsag": {
+    "kind": "decoders",
+    "description": "POCSAG 512/1200/2400 pager messages",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "multimon"
+  },
+  "flex": {
+    "kind": "decoders",
+    "description": "FLEX pager messages",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "multimon"
+  },
+  "morse": {
+    "kind": "decoders",
+    "description": "Morse/CW text from audio or centered CW IQ",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "multimon"
+  },
+  "selective-call": {
+    "kind": "decoders",
+    "description": "DTMF / ZVEI / CCIR / EEA / EIA selective-calling tones",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "multimon"
+  },
+  "digital-audio": {
+    "kind": "decoders",
+    "description": "AFSK1200/2400, FSK9600 and FMSFSK messages",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "multimon"
+  },
+  "eas": {
+    "kind": "decoders",
+    "description": "EAS/SAME broadcast alert messages",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "multimon"
+  },
+  "packet-radio": {
+    "kind": "decoders",
+    "description": "CRC-checked AX.25 / APRS from audio or IQ",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "packet-radio"
+  },
+  "ais": {
+    "kind": "decoders",
+    "description": "AIS A/B messages, MMSI and positions from IQ, audio or NMEA",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav",
+      "nmea"
+    ],
+    "backend": "ais"
+  },
+  "atis-symbols": {
+    "kind": "decoders",
+    "description": "Marine ATIS/DSC checked symbols (partial framing, not full vessel ID)",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "atis"
+  },
+  "gps-nmea": {
+    "kind": "decoders",
+    "description": "Checksum-validated GPS/GNSS receiver NMEA sentences",
+    "formats": [
+      "nmea"
+    ],
+    "backend": "nmea"
+  },
+  "gps-l1": {
+    "kind": "decoders",
+    "description": "GPS L1 C/A acquisition, tracking and navigation using GNSS-SDR",
+    "formats": [
+      "cs8",
+      "cu8"
+    ],
+    "backend": "gnss"
+  },
+  "gsm-bcch": {
+    "kind": "decoders",
+    "description": "Offline GSM broadcast-control-channel messages",
+    "formats": [
+      "cs8",
+      "cu8"
+    ],
+    "backend": "gsm"
+  },
+  "digital-voice": {
+    "kind": "decoders",
+    "description": "DMR / D-Star / dPMR / YSF metadata with DSDcc",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "voice"
+  },
+  "satellite": {
+    "kind": "decoders",
+    "description": "SatDump weather/satellite pipeline, configurable in options.toml",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "satellite"
+  },
+  "tv-transport": {
+    "kind": "decoders",
+    "description": "MPEG-TS PID, CRC-checked PAT programs and scrambling flags",
+    "formats": [
+      "ts"
+    ],
+    "backend": "transport"
+  },
+  "adsb": {
+    "kind": "decoders",
+    "description": "1090 MHz ADS-B extended squitter with strict CRC-24",
+    "formats": [
+      "cs8",
+      "cu8",
+      "hex"
+    ],
+    "backend": "adsb"
+  },
+  "ble-advertising": {
+    "kind": "decoders",
+    "description": "BLE 1M advertisements: address, name, UUIDs, validated CRC",
+    "formats": [
+      "cs8",
+      "cu8"
+    ],
+    "backend": "ble"
+  },
+  "wifi-pcap": {
+    "kind": "decoders",
+    "description": "802.11 packet metadata, SSIDs, addresses and protection flags",
+    "formats": [
+      "pcap",
+      "pcapng"
+    ],
+    "backend": "packets"
+  },
+  "bluetooth-pcap": {
+    "kind": "decoders",
+    "description": "Bluetooth/BLE capture metadata and advertised device information",
+    "formats": [
+      "pcap",
+      "pcapng"
+    ],
+    "backend": "packets"
+  },
+  "weather-sensors": {
+    "kind": "decoders",
+    "description": "rtl_433 sensor messages from recorded IQ",
+    "formats": [
+      "cs8",
+      "cu8"
+    ],
+    "backend": "weather"
+  },
+  "danish-frequency": {
+    "kind": "identifiers",
+    "description": "User-imported Danish frequency lists with source, date and matching distance",
+    "formats": [
+      "cs8",
+      "cu8",
+      "wav"
+    ],
+    "backend": "frequency"
+  },
+  "chirp-id": {
+    "kind": "identifiers",
+    "description": "Repeated linear chirp candidates (LoRa, radar or other chirped waveforms)",
+    "formats": [
+      "cs8",
+      "cu8"
+    ],
+    "backend": "identify"
+  },
+  "zigbee-pcap": {
+    "kind": "decoders",
+    "description": "802.15.4 / ZigBee packet metadata: PAN IDs, short addresses, security flag",
+    "formats": [
+      "pcap",
+      "pcapng"
+    ],
+    "backend": "packets"
+  },
+  "gsm-security": {
+    "kind": "identifiers",
+    "description": "Passive GSM A5/GEA cipher, masked IMSI exposure and cell-baseline observations",
+    "formats": [
+      "pcap",
+      "pcapng"
+    ],
+    "backend": "gsm-security"
+  },
+  "sigid-id": {
+    "kind": "identifiers",
+    "description": "Offline SigID Wiki frequency/bandwidth/modulation reference ranking",
+    "formats": [
+      "cs8",
+      "cu8"
+    ],
+    "backend": "sigid"
+  }
+}

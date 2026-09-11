@@ -27,13 +27,16 @@ const RED: Color = Color::Rgb(244, 39, 67);
 const CYAN: Color = Color::Rgb(120, 210, 219);
 const BG: Color = Color::Rgb(9, 12, 19);
 const MUTED: Color = Color::Rgb(127, 142, 160);
-const TABS: [&str; 6] = [
+const TABS: [&str; 9] = [
     "Spectrum",
     "Detections",
     "Recordings",
     "Addons",
     "Settings",
     "Workbench",
+    "Survey",
+    "Listen",
+    "VHF/UHF",
 ];
 struct Restore;
 impl Drop for Restore {
@@ -46,6 +49,9 @@ struct App {
     c: Config,
     tab: usize,
     stream: Option<Stream>,
+    survey: Option<crate::survey::Survey>,
+    panorama: Option<crate::survey::Panorama>,
+    audio: Option<crate::listening::Audio>,
     report: Option<Report>,
     water: VecDeque<Vec<f32>>,
     status: String,
@@ -75,6 +81,9 @@ pub fn run(c: Config) -> Result<()> {
         c,
         tab: 0,
         stream: None,
+        survey: None,
+        panorama: None,
+        audio: None,
         report: None,
         water: VecDeque::new(),
         status: "Ready · Space starts reception · : opens command bar".into(),
@@ -91,6 +100,35 @@ pub fn run(c: Config) -> Result<()> {
         history: crate::storage::history().unwrap_or_default(),
     };
     while !crate::CANCELLED.load(Ordering::Relaxed) || a.busy {
+        if let Some(audio) = &mut a.audio {
+            match audio.finished() {
+                Ok(Some(message)) => {
+                    a.status = message;
+                    a.audio = None;
+                }
+                Err(e) => {
+                    a.status = "Audio failed · details in Workbench".into();
+                    a.output = e.to_string();
+                    a.tab = 5;
+                    a.audio = None;
+                }
+                _ => {}
+            }
+        }
+        let mut sweep_end = None;
+        if let Some(survey) = &a.survey {
+            while let Ok(frame) = survey.frames.try_recv() {
+                a.panorama = Some(frame);
+            }
+            while let Ok(message) = survey.events.try_recv() {
+                sweep_end = Some(message);
+            }
+        }
+        if let Some(message) = sweep_end {
+            a.survey = None;
+            a.status = message.clone();
+            a.output = message;
+        }
         let mut disconnected = false;
         let mut failure = None;
         if let Some(stream) = &a.stream {
@@ -173,6 +211,8 @@ pub fn run(c: Config) -> Result<()> {
                                 Ok(()) => {
                                     a.c = next;
                                     a.stream = None;
+                                    a.survey = None;
+                                    a.audio = None;
                                     a.status = "Settings saved; Space restarts reception".into();
                                 }
                                 Err(e) => a.status = e.to_string(),
@@ -203,19 +243,62 @@ pub fn run(c: Config) -> Result<()> {
                     a.selected = 0;
                     a.scroll = 0;
                 }
-                KeyCode::Char(c @ '1'..='6') => {
+                KeyCode::Char(c @ '1'..='9') => {
                     a.tab = c as usize - '1' as usize;
                     a.selected = 0;
                     a.scroll = 0;
+                }
+                KeyCode::Char('l') => {
+                    let frequency = a.c.frequency;
+                    run_command(&mut a, format!("frequency lookup --frequency {frequency}"));
                 }
                 KeyCode::Char(':') => a.input = Some(String::new()),
                 KeyCode::Char(' ') => {
                     if a.busy {
                         a.status = "Wait for active job before starting receiver".into();
+                    } else if a.tab == 6 {
+                        a.stream = None;
+                        a.audio = None;
+                        if a.survey.is_some() {
+                            a.survey = None;
+                            a.status = "Sweep stopped".into();
+                        } else {
+                            match crate::survey::Survey::start(&a.c) {
+                                Ok(s) => {
+                                    a.survey = Some(s);
+                                    a.panorama = None;
+                                    a.status =
+                                        "Sweeping sequentially · red peak hold / cyan latest bins"
+                                            .into();
+                                }
+                                Err(e) => a.status = e.to_string(),
+                            }
+                        }
+                    } else if a.tab >= 7 {
+                        a.stream = None;
+                        a.survey = None;
+                        if a.audio.is_some() {
+                            a.audio = None;
+                            a.status = "Listening stopped".into();
+                        } else {
+                            match crate::listening::Audio::start(&a.c, 3600, false, 0.0) {
+                                Ok(s) => {
+                                    a.audio = Some(s);
+                                    a.status = format!(
+                                        "Listening {} · {:.6} MHz · Space stops",
+                                        a.c.listen_mode,
+                                        a.c.frequency as f64 / 1e6
+                                    );
+                                }
+                                Err(e) => a.status = e.to_string(),
+                            }
+                        }
                     } else if a.stream.is_some() {
                         a.stream = None;
                         a.status = "Receiver stopped".into();
                     } else {
+                        a.survey = None;
+                        a.audio = None;
                         match Stream::start(a.c.clone()) {
                             Ok(s) => {
                                 a.report = None;
@@ -231,9 +314,23 @@ pub fn run(c: Config) -> Result<()> {
                         }
                     }
                 }
+                KeyCode::Char('w') if a.tab == 2 || a.tab == 3 => {
+                    a.input =
+                        Some("export-pcap 'recording.cs8' 'packets.pcap' --protocol ble".into())
+                }
                 KeyCode::Char('p') => a.paused = !a.paused,
                 KeyCode::Char('s') => {
-                    if let Some(r) = &a.report {
+                    if a.tab == 6 {
+                        if let Some(p) = &a.panorama {
+                            let result = serde_json::json!({"acquisition":"sequential sweep, bins have different acquisition times","panorama":p});
+                            a.status = match crate::storage::finding("survey", &result.to_string())
+                            {
+                                Ok(()) => "Saved sequential survey to SQLite findings".into(),
+                                Err(e) => e.to_string(),
+                            };
+                            a.history = crate::storage::history().unwrap_or_default();
+                        }
+                    } else if let Some(r) = &a.report {
                         a.status = match crate::storage::save(r) {
                             Ok(id) => format!("Saved investigation #{id}"),
                             Err(e) => e.to_string(),
@@ -267,6 +364,73 @@ pub fn run(c: Config) -> Result<()> {
                 }
                 KeyCode::PageDown => a.scroll = a.scroll.saturating_add(10),
                 KeyCode::PageUp => a.scroll = a.scroll.saturating_sub(10),
+                KeyCode::Enter if a.tab >= 7 => {
+                    let channels = if a.tab == 7 {
+                        Ok(crate::listening::presets())
+                    } else {
+                        crate::listening::channels()
+                    };
+                    match channels {
+                        Ok(rows) if !rows.is_empty() => {
+                            let row = &rows[a.selected % rows.len()];
+                            let mut c = a.c.clone();
+                            c.frequency = row.rx_hz;
+                            c.listen_mode = row.mode.clone();
+                            c.listen_bandwidth = row.bandwidth;
+                            match c.validate() {
+                                Ok(()) => {
+                                    a.audio = None;
+                                    a.stream = None;
+                                    a.survey = None;
+                                    a.audio = None;
+                                    a.survey = None;
+                                    a.c = c;
+                                    a.status = format!("Tuned {} · Space listens", row.name);
+                                }
+                                Err(e) => a.status = e.to_string(),
+                            }
+                        }
+                        Err(e) => a.status = e.to_string(),
+                        _ => {}
+                    }
+                }
+                KeyCode::Char('t') if a.tab == 8 => {
+                    if let Ok(rows) = crate::listening::channels()
+                        && !rows.is_empty()
+                    {
+                        let row = &rows[a.selected % rows.len()];
+                        if let Some(tx) = row.tx_hz {
+                            a.input = Some(format!(
+                                "talk --frequency {tx} --mode {} --seconds 10 --ctcss {}",
+                                row.mode, row.ctcss_hz
+                            ));
+                            a.status =
+                                "TX preparation · append --confirm-tx to transmit microphone audio"
+                                    .into();
+                        } else {
+                            a.status = "No TX frequency configured".into();
+                        }
+                    }
+                }
+                KeyCode::Char('e') if a.tab == 8 => {
+                    if let Ok(rows) = crate::listening::channels()
+                        && !rows.is_empty()
+                    {
+                        let index = a.selected % rows.len();
+                        a.input = Some(format!(
+                            "channels set {} rx_hz {}",
+                            index + 1,
+                            rows[index].rx_hz
+                        ));
+                        a.status="Edit field/value: name, rx_hz, tx_hz, ctcss_hz, mode, bandwidth, source".into();
+                    }
+                }
+                KeyCode::Char('a') if a.tab == 8 => {
+                    a.input=Some("channels add 'New repeater' --rx 145600000 --tx 145000000 --ctcss 0 --source 'User supplied'".into());
+                }
+                KeyCode::Char('i') if a.tab == 3 => {
+                    a.input = Some("identify 'recording.cs8'".into())
+                }
                 KeyCode::Enter if a.tab == 4 => {
                     let fields = settings(&a.c);
                     let (k, v) = &fields[a.selected % fields.len()];
@@ -323,6 +487,8 @@ fn run_command(a: &mut App, text: String) {
                 cli.sample_rate = Some(a.c.sample_rate);
             }
             a.stream = None;
+            a.survey = None;
+            a.audio = None;
             a.busy = true;
             a.status = format!("Running: {text}");
             let tx = a.send.clone();
@@ -378,13 +544,21 @@ fn draw(f: &mut Frame, a: &App) {
         Paragraph::new(title).block(Block::bordered().border_style(Style::default().fg(RED))),
         rows[0],
     );
+    let first = if area.width < 125 {
+        a.tab.saturating_sub(2).min(TABS.len() - 4)
+    } else {
+        0
+    };
+    let visible = if area.width < 125 { 4 } else { TABS.len() };
     f.render_widget(
         Tabs::new(
             TABS.iter()
                 .enumerate()
+                .skip(first)
+                .take(visible)
                 .map(|(i, t)| format!("{} {t}", i + 1)),
         )
-        .select(a.tab)
+        .select(a.tab - first)
         .highlight_style(Style::default().fg(RED).bold())
         .divider("│"),
         rows[1],
@@ -432,44 +606,46 @@ fn draw(f: &mut Frame, a: &App) {
                 .unwrap_or_default();
             f.render_widget(Paragraph::new(format!("r: prepare recording command · : analyze <path> · : history --export ID\n\n{}\n\nInvestigations\n{}",files,a.history)).wrap(Wrap{trim:false}).scroll((a.scroll,0)).block(panel(" Recordings / SQLite history ")),rows[2]);
         }
-        3 => {
-            let text = match crate::addons::list() {
-                Ok(v) => {
-                    if v.is_empty() {
-                        format!(
-                            "No user addons installed.\n\nCopy examples into {}\n\nAddons are executable programs running as your user.\nReview code, then enable with Enter.\nSee docs/ADDONS.md for the language-neutral JSON API.",
-                            config::config_dir().display()
-                        )
-                    } else {
-                        v.iter()
-                            .enumerate()
-                            .map(|(i, m)| {
-                                format!(
-                                    "{} {} [{}] {}\n    {}",
-                                    if i == a.selected % v.len() {
-                                        "▶"
-                                    } else {
-                                        " "
-                                    },
-                                    m.manifest.name,
-                                    m.manifest.kind,
-                                    if m.manifest.enabled { "ON" } else { "OFF" },
-                                    m.manifest.description
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    }
-                }
-                Err(e) => e.to_string(),
-            };
-            f.render_widget(
-                Paragraph::new(text)
-                    .wrap(Wrap { trim: false })
-                    .block(panel(" Addons · ↑↓ select · Enter enable/disable ")),
+        3 => match crate::addons::list() {
+            Ok(modules) if !modules.is_empty() => {
+                let mut state =
+                    ListState::default().with_selected(Some(a.selected % modules.len()));
+                let items = modules
+                    .iter()
+                    .map(|m| {
+                        ListItem::new(format!(
+                            "{} [{}] {}\n  {}\n  Formats: {} · requires: {}",
+                            if m.manifest.enabled { "ON " } else { "OFF" },
+                            m.manifest.kind,
+                            m.manifest.name,
+                            m.manifest.description,
+                            m.manifest.formats.join(","),
+                            m.manifest.requires.join(",")
+                        ))
+                    })
+                    .collect::<Vec<_>>();
+                f.render_stateful_widget(
+                    List::new(items)
+                        .highlight_style(Style::default().fg(CYAN))
+                        .highlight_symbol("▶ ")
+                        .block(panel(
+                            " Addons · ↑↓ select · Enter toggle · i identify file ",
+                        )),
+                    rows[2],
+                    &mut state,
+                );
+            }
+            other => f.render_widget(
+                Paragraph::new(match other {
+                    Err(e) => e.to_string(),
+                    _ => "Install modules with : addon install".into(),
+                })
+                .block(panel(" Addons ")),
                 rows[2],
-            );
-        }
+            ),
+        },
+        6 => survey_view(f, rows[2], a),
+        7 | 8 => listening_view(f, rows[2], a),
         4 => {
             let fields = settings(&a.c);
             let mut state = ListState::default().with_selected(Some(a.selected % fields.len()));
@@ -638,8 +814,146 @@ fn settings(c: &Config) -> Vec<(String, String)> {
         .collect()
 }
 fn help() -> &'static str {
-    "THUGS(red) RF · Kawaiipantsu · https://thugs.red\n\nSpace starts/stops RX. Demo is explicitly synthetic.\nTab / 1–6 switch panels. s saves current spectrum to SQLite.\nSettings: ↑↓ and Enter to edit any field. Esc cancels edits.\nAddons: ↑↓ and Enter to enable a reviewed addon.\nr prepares a five-second recording; Enter starts it.\n: opens the command bar; commands run on a worker thread.\nRX stops before jobs so hardware is not opened twice.\n\nExample commands (paths containing spaces need quotes):\n  doctor\n  record /tmp/signal.cs8 --seconds 5\n  analyze /tmp/signal.cs8 --png /tmp/spectrum.png\n  decode /tmp/signal.cs8 --mode ook\n  addon run rtl433 /tmp/signal.cs8\n  demod /tmp/signal.cs8 /tmp/audio.wav --mode fm\n  play /tmp/audio.wav\n  encode /tmp/test.wav --bits 10110010 --mode afsk\n  ai --input /tmp/audio.wav --format wav\n  ai --image /tmp/spectrum.png\n  history\n\nAI: set ai_provider, ai_model and local_url in Settings.\nKeys: OPENAI_API_KEY / ANTHROPIC_API_KEY / THUGSRF_LOCAL_API_KEY.\nAI receives measured features for WAV/IQ, or supplied images.\nAI output is a hypothesis. Audio waveforms are not sent directly.\n\nRF replay uses signed 8-bit IQ and requires --confirm-tx.\nAudio playback uses your selected ALSA device.\nUse --help on any command for options.\n"
+    "THUGS(red) RF · Kawaiipantsu · https://thugs.red\n\nSpace starts/stops RX. Demo is explicitly synthetic.\nTab / 1–9 switch panels. 7 Survey, 8 Listen, 9 VHF/UHF. s saves current spectrum to SQLite.\nSettings: ↑↓ and Enter to edit any field. Esc cancels edits.\nAddons: ↑↓ and Enter to enable a reviewed addon.\nr prepares a five-second recording; Enter starts it.\n: opens the command bar; commands run on a worker thread.\nRX stops before jobs so hardware is not opened twice.\n\nExample commands (paths containing spaces need quotes):\n  doctor\n  addon install\n  addon enable all --kind identifiers\n  identify /tmp/signal.cs8\n  frequency sources\n  frequency lookup --frequency 145600000\n  record /tmp/signal.cs8 --seconds 5\n  analyze /tmp/signal.cs8 --png /tmp/spectrum.png\n  decode /tmp/signal.cs8 --mode ook\n  addon run rtl433 /tmp/signal.cs8\n  demod /tmp/signal.cs8 /tmp/audio.wav --mode fm\n  play /tmp/audio.wav\n  encode /tmp/test.wav --bits 10110010 --mode afsk\n  ai --input /tmp/audio.wav --format wav\n  ai --image /tmp/spectrum.png\n  history\n\nAI: set ai_provider, ai_model and local_url in Settings.\nKeys: OPENAI_API_KEY / ANTHROPIC_API_KEY / THUGSRF_LOCAL_API_KEY.\nAI receives measured features for WAV/IQ, or supplied images.\nAI output is a hypothesis. Audio waveforms are not sent directly.\n\nRF replay uses signed 8-bit IQ and requires --confirm-tx.\nAudio playback uses your selected ALSA device.\nUse --help on any command for options.\n"
 }
+fn survey_view(f: &mut Frame, area: Rect, a: &App) {
+    let parts = Layout::vertical([Constraint::Length(3), Constraint::Min(5)]).split(area);
+    let status = if let Some(p) = &a.panorama {
+        format!(
+            "{}–{} MHz · {:.0} kHz bins · pass {} · current coverage {:.1}%\nSequential sweep: bins have different acquisition times. Space start/stop.",
+            p.start_mhz,
+            p.end_mhz,
+            p.bin_hz as f64 / 1000.,
+            p.passes + 1,
+            p.coverage * 100.
+        )
+    } else {
+        format!(
+            "{}–{} MHz sequential HackRF survey · Space starts\nEdit sweep_start_mhz / sweep_end_mhz / sweep_bin_hz in Settings.",
+            a.c.sweep_start_mhz, a.c.sweep_end_mhz
+        )
+    };
+    f.render_widget(
+        Paragraph::new(status).style(Style::default().fg(CYAN)),
+        parts[0],
+    );
+    let latest: Vec<_> = a
+        .panorama
+        .as_ref()
+        .map(|p| {
+            p.power
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    (
+                        p.start_mhz as f64 + (i as f64 + 0.5) * p.bin_hz as f64 / 1e6,
+                        *v as f64,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let peak: Vec<_> = a
+        .panorama
+        .as_ref()
+        .map(|p| {
+            p.peak
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    (
+                        p.start_mhz as f64 + (i as f64 + 0.5) * p.bin_hz as f64 / 1e6,
+                        *v as f64,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    f.render_widget(
+        Chart::new(vec![
+            Dataset::default()
+                .name("latest")
+                .marker(symbols::Marker::Braille)
+                .style(Style::default().fg(CYAN))
+                .data(&latest),
+            Dataset::default()
+                .name("peak hold")
+                .marker(symbols::Marker::Braille)
+                .style(Style::default().fg(RED))
+                .data(&peak),
+        ])
+        .block(panel(" Wideband panorama · relative power "))
+        .x_axis(
+            Axis::default()
+                .title("MHz")
+                .bounds([a.c.sweep_start_mhz as f64, a.c.sweep_end_mhz as f64])
+                .labels([
+                    a.c.sweep_start_mhz.to_string(),
+                    a.c.sweep_end_mhz.to_string(),
+                ]),
+        )
+        .y_axis(
+            Axis::default()
+                .bounds([-100., 0.])
+                .labels(["-100", "-50", "0"]),
+        ),
+        parts[1],
+    );
+}
+fn listening_view(f: &mut Frame, area: Rect, a: &App) {
+    let parts = Layout::vertical([
+        Constraint::Length(5),
+        Constraint::Min(5),
+        Constraint::Length(4),
+    ])
+    .split(area);
+    f.render_widget(Paragraph::new(format!("{:.6} MHz  {}  BW {} Hz  squelch {:.0} dBFS\n↑↓ select · Enter tune · Space listen/stop · Settings edit frequency/mode\nALSA: {} · {}\nAM / narrow FM / mono broadcast FM (50 µs de-emphasis)",a.c.frequency as f64/1e6,a.c.listen_mode,a.c.listen_bandwidth,a.c.squelch_dbfs,a.c.audio_device,if a.audio.is_some(){"LISTENING"}else{"STOPPED"})).style(Style::default().fg(CYAN)),parts[0]);
+    let rows = if a.tab == 7 {
+        Ok(crate::listening::presets())
+    } else {
+        crate::listening::channels()
+    };
+    match rows {
+        Ok(rows) => {
+            let mut state = ListState::default().with_selected(if rows.is_empty() {
+                None
+            } else {
+                Some(a.selected % rows.len())
+            });
+            let items = rows
+                .iter()
+                .map(|r| {
+                    ListItem::new(format!(
+                        "{} · RX {:.6} · TX {} MHz · {}\n  CTCSS {} Hz · {}",
+                        r.name,
+                        r.rx_hz as f64 / 1e6,
+                        r.tx_hz
+                            .map(|v| format!("{:.6}", v as f64 / 1e6))
+                            .unwrap_or_else(|| "—".into()),
+                        r.mode,
+                        r.ctcss_hz,
+                        r.source
+                    ))
+                })
+                .collect::<Vec<_>>();
+            f.render_stateful_widget(
+                List::new(items)
+                    .highlight_style(Style::default().fg(RED))
+                    .highlight_symbol("▶ ")
+                    .block(panel(if a.tab == 7 {
+                        " Listening presets "
+                    } else {
+                        " Channels / repeaters · a add · e edit · t prepare TX "
+                    })),
+                parts[1],
+                &mut state,
+            );
+        }
+        Err(e) => f.render_widget(Paragraph::new(e.to_string()), parts[1]),
+    }
+    f.render_widget(Paragraph::new(if a.tab==7{"Presets are tuning starting points, not station listings.\nHackRF MW: only upper band ≥1 MHz; lower MW needs an upconverter.\nNESDR needs an HF upconverter for SW/MW."}else{"Directory: ~/.config/thugsrf/repeaters.toml · : channels remove <index>\nDanish listings: https://www.oz1ln.dk/kort_og_lister/\nHalf-duplex: t prepares a finite TX command; append --confirm-tx to send."}).style(Style::default().fg(MUTED)),parts[2]);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -651,6 +965,9 @@ mod tests {
                 c: Config::default(),
                 tab: 0,
                 stream: None,
+                survey: None,
+                panorama: None,
+                audio: None,
                 report: None,
                 water: VecDeque::new(),
                 status: "Ready".into(),
@@ -667,7 +984,7 @@ mod tests {
                 history: String::new(),
             };
             let mut t = Terminal::new(ratatui::backend::TestBackend::new(w, h)).unwrap();
-            for tab in 0..6 {
+            for tab in 0..TABS.len() {
                 a.tab = tab;
                 t.draw(|f| draw(f, &a)).unwrap();
             }

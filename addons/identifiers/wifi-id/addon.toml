@@ -1,0 +1,9 @@
+api_version = 1
+name = "wifi-id"
+kind = "identifiers"
+description = "Wi-Fi OFDM training candidates or actual PCAP metadata"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "wifi-id"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav", "pcap", "pcapng"]
+requires = ["/usr/bin/python3", "tshark"]

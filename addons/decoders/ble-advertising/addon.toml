@@ -1,0 +1,9 @@
+api_version = 1
+name = "ble-advertising"
+kind = "decoders"
+description = "BLE 1M advertisements: address, name, UUIDs, validated CRC"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "ble-advertising"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8"]
+requires = ["/usr/bin/python3"]

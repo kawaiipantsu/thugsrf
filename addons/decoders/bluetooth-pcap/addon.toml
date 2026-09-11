@@ -1,0 +1,9 @@
+api_version = 1
+name = "bluetooth-pcap"
+kind = "decoders"
+description = "Bluetooth/BLE capture metadata and advertised device information"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "bluetooth-pcap"]
+enabled = false
+timeout_seconds = 120
+formats = ["pcap", "pcapng"]
+requires = ["/usr/bin/python3", "tshark"]

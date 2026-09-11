@@ -1,0 +1,9 @@
+api_version = 1
+name = "danish-frequency"
+kind = "identifiers"
+description = "Imported Danish reference lists: approximate service/user with provenance"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "danish-frequency"]
+enabled = false
+timeout_seconds = 10
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3"]

@@ -1,0 +1,9 @@
+api_version = 1
+name = "packet-radio"
+kind = "decoders"
+description = "CRC-checked AX.25 / APRS from audio or IQ"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "packet-radio"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3", "atest"]

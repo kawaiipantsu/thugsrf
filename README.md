@@ -16,8 +16,8 @@ make toolchain                   # official rustup installer / pinned stable com
 make build
 make check
 make test
-make deb                         # dist/thugsrf_0.1.1_<arch>.deb
-sudo apt install ./dist/thugsrf_0.1.1_amd64.deb
+make deb                         # dist/thugsrf_0.2.0_<arch>.deb
+sudo apt install ./dist/thugsrf_0.2.0_amd64.deb
 thugsrf doctor
 thugsrf
 ```
@@ -47,12 +47,29 @@ Actual xterm screenshots of the running application. The spectrum views use the 
 
 </details>
 
+**Wideband Survey — passive HackRF measurements across 1 MHz–6 GHz**
+
+[![HackRF sequential wideband survey with peak hold](assets/screenshots/survey-wide.png)](assets/screenshots/survey-wide.png)
+
+<details>
+<summary>See the addon catalog, listening presets and VHF/UHF directory</summary>
+
+![Activatable protocol and OSINT modules](assets/screenshots/addons-wide.png)
+
+![AM/FM and SW/MW listening presets, stopped](assets/screenshots/listen-wide.png)
+
+![VHF/UHF editable channel directory with simplex presets](assets/screenshots/vhf-uhf-wide.png)
+
+</details>
+
 The UI fits **80 × 24**, expands with the terminal, and adds a receiver sidebar at larger widths. **170 × 50** is recommended. It uses RGB color, box drawing, a braille spectrum, and two waterfall rows per terminal cell.
 
 | Key | Action |
 | --- | --- |
-| Space | Start/stop passive reception |
-| Tab / Shift-Tab / 1–6 | Switch panels |
+| Space | Start/stop reception, sweep or listening in the selected panel |
+| 7 / 8 / 9 | Wideband Survey / AM-FM Listen / VHF-UHF directory |
+| l | Look up tuned frequency in local reference lists |
+| Tab / Shift-Tab / 1–9 | Switch panels |
 | p | Freeze display while continuing to drain the receiver |
 | s | Save spectrum and detections to SQLite |
 | r | Prepare a finite recording command |
@@ -64,6 +81,14 @@ The UI fits **80 × 24**, expands with the terminal, and adds a receiver sidebar
 If HackRF exits before delivering any samples with a one-second USB transfer timeout, live reception retries up to three attempts. Other errors and failures after reception starts are shown in full in the Workbench; Space retries manually.
 
 The command bar supports quoted paths. Jobs execute off the UI thread and stop live reception first to release the radio. The TUI never starts RF transmission on launch. `replay` needs `--confirm-tx` on every invocation.
+
+## Survey, listening and repeaters
+
+**7 Survey:** sequential HackRF panorama from **1 MHz to 6 GHz**, with coverage and peak hold. The full span is swept; instantaneous capture remains at most about 20 MHz.
+
+**8 Listen:** AM, narrow FM and mono broadcast FM audio, with SW and upper-MW tuning presets. **9 VHF/UHF:** editable RX/TX channel directory, CTCSS TX tones and explicitly confirmed finite microphone transmission. Start listening with Space. [Controls and hardware limits](docs/RADIO.md).
+
+**Frequency OSINT:** import saved Danish HTML tables or CSV lists, then press **l** to look up the current frequency. Entries retain source, region and import date. Includes official US/European source links and a small US allocation starter set. [DKScan, FCC/NTIA and EFIS workflow](docs/FREQUENCIES.md).
 
 ## Hardware and capture
 
@@ -111,7 +136,10 @@ The built-in OOK decoder extracts envelope pulse durations; the FSK decoder extr
 
 ```sh
 make addons
+thugsrf addon install              # works from the installed Debian package too
 thugsrf addon list
+thugsrf addon enable all --kind identifiers
+thugsrf identify signal.cs8
 # Review addons before enabling: they execute with your user permissions.
 thugsrf addon toggle rtl433
 thugsrf addon run rtl433 signal.cs8
@@ -121,7 +149,25 @@ thugsrf addon run band-context signal.cs8
 
 Addons live in `~/.config/thugsrf/decoders/<name>/` and `~/.config/thugsrf/identifiers/<name>/`. Each has an `addon.toml` manifest and an executable command. A versioned JSON request arrives on stdin; one JSON object leaves stdout. Rust, Go, Python and other languages all work. Addons have execution deadlines and a 1 MiB output limit. They are trusted local programs, **not sandboxed plugins**.
 
-Included examples: OOK pulse analysis, rtl_433 offline decoding, and European frequency-context candidates with an EFIS reference. The latter is an offline aid; this release does not query live allocation registries or identify transmitter owners. See [the addon guide](docs/ADDONS.md) for the contract and extension points.
+Included: **43 activatable addons**, covering protocol decoders, packet metadata, waveform candidates and sourced frequency hints. See [the capability and limitation matrix](docs/PROTOCOLS.md). These modules do not establish transmitter ownership. See [the addon guide](docs/ADDONS.md) for the contract and extension points.
+
+## SigID Wiki and GSM security
+
+[SigID Wiki](https://www.sigidwiki.com/wiki/Database) supplies an optional local reference catalog: **586 signal entries** imported on the development host. Run `thugsrf sigid sync` to fetch factual metadata, then rank candidates by frequency, bandwidth and modulation. Lookups work offline. [Catalog and scoring details](docs/SIGID.md).
+
+The `gsm-security` addon inspects existing GSM signalling captures for A5/GEA cipher settings, identity requests, masked IMSI visibility and public-cell changes against a reviewed baseline. These are passive observations, not proof of an IMSI catcher or subscriber roaming state. [GSM security evidence and limitations](docs/GSM-SECURITY.md).
+
+## Wireshark packet export
+
+Export recovered **BLE advertising**, **AX.25 packet-radio**, or **GSM BCCH/GSMTAP** frames as PCAP with a provenance sidecar. BLE/AX.25 exports are fixture-tested in Wireshark; the GSM RF backend still needs a clean reference capture. In Recordings/Addons, press **w** to prepare an export.
+
+```sh
+thugsrf addon enable packet-radio
+thugsrf export-pcap packet-radio.wav packets.pcap --protocol ax25
+wireshark packets.pcap
+```
+
+[Packet formats, BLE/GSM examples and timestamp limitations](docs/PCAP.md).
 
 ## OpenAI, Anthropic and local LLMs
 
@@ -143,6 +189,9 @@ OpenAI uses the [Responses API](https://platform.openai.com/docs/api-reference/r
 
 - `~/.config/thugsrf/config.toml`: editable, validated device, DSP and provider settings.
 - `~/.config/thugsrf/{decoders,identifiers}/`: user addons.
+- `~/.config/thugsrf/repeaters.toml`: local channels/repeaters.
+- `~/.local/share/thugsrf/frequencies.json`: imported source-labelled frequency references.
+- `~/.local/share/thugsrf/references.sqlite3`: SigID Wiki metadata cache.
 - `~/.local/share/thugsrf/recordings/`: TUI and scan recordings.
 - `~/.local/share/thugsrf/investigations.sqlite3`: reports, decoder findings and AI hypotheses; WAL mode.
 

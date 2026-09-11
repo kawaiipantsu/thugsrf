@@ -1,0 +1,9 @@
+api_version = 1
+name = "sigid-id"
+kind = "identifiers"
+description = "SigID Wiki reference candidates using frequency, measured bandwidth and optional modulation"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "sigid-id"]
+enabled = false
+timeout_seconds = 30
+formats = ["cs8", "cu8"]
+requires = ["/usr/bin/python3"]

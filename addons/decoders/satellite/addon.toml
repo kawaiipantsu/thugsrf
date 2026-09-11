@@ -1,0 +1,9 @@
+api_version = 1
+name = "satellite"
+kind = "decoders"
+description = "SatDump weather/satellite pipeline, configurable in options.toml"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "satellite"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3", "satdump"]

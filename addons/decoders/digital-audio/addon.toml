@@ -1,0 +1,9 @@
+api_version = 1
+name = "digital-audio"
+kind = "decoders"
+description = "AFSK1200/2400, FSK9600 and FMSFSK messages"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "digital-audio"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3", "multimon-ng"]

@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix='thugsrf-package-') as temp:
     shutil.copytree(root / 'docs', stage / 'usr/share/doc/thugsrf/docs')
     shutil.copytree(root / 'assets', stage / 'usr/share/doc/thugsrf/assets')
     copy('assets/logo.txt', 'usr/share/thugsrf/logo.txt')
-    shutil.copytree(root / 'addons', stage / 'usr/share/thugsrf/addons')
+    shutil.copytree(root / 'addons', stage / 'usr/share/thugsrf/addons', ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
     (stage / 'DEBIAN').mkdir()
     # Let Debian derive the actual libc/libgcc requirements from this build.
     with tempfile.TemporaryDirectory(prefix='thugsrf-shlibs-') as check:
@@ -43,8 +43,9 @@ Priority: optional
 Architecture: {a.arch}
 Maintainer: Kawaiipantsu (THUGS(red)) <kawaiipantsu@users.noreply.github.com>
 Homepage: https://thugs.red
-Depends: {dependencies}, ca-certificates, hackrf, alsa-utils
-Recommends: rtl-sdr, rtl-433, python3
+Depends: {dependencies}, ca-certificates, curl, hackrf, alsa-utils, python3, python3-numpy, python3-scipy
+Recommends: rtl-sdr, rtl-433, multimon-ng, direwolf, tshark
+Suggests: satdump, dsdcc, gnss-sdr, gr-gsm
 Installed-Size: {size}
 Description: THUGS(red) RF radio signal intelligence workbench
  Native Rust CLI and responsive TUI for HackRF and RTL-SDR reception,

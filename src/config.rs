@@ -18,6 +18,12 @@ pub struct Config {
     pub ai_provider: String,
     pub ai_model: String,
     pub local_url: String,
+    pub sweep_start_mhz: u32,
+    pub sweep_end_mhz: u32,
+    pub sweep_bin_hz: u32,
+    pub listen_mode: String,
+    pub listen_bandwidth: u32,
+    pub squelch_dbfs: f32,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -35,6 +41,12 @@ impl Default for Config {
             ai_provider: "local".into(),
             ai_model: String::new(),
             local_url: "http://127.0.0.1:11434/v1".into(),
+            sweep_start_mhz: 1,
+            sweep_end_mhz: 6000,
+            sweep_bin_hz: 1_000_000,
+            listen_mode: "fm".into(),
+            listen_bandwidth: 12500,
+            squelch_dbfs: -65.0,
         }
     }
 }
@@ -78,6 +90,28 @@ impl Config {
         Ok(c)
     }
     pub fn validate(&self) -> Result<()> {
+        ensure!(
+            self.sweep_start_mhz >= 1
+                && self.sweep_start_mhz < self.sweep_end_mhz
+                && self.sweep_end_mhz <= 6000,
+            "sweep range must be within 1..6000 MHz"
+        );
+        ensure!(
+            (100_000..=5_000_000).contains(&self.sweep_bin_hz),
+            "sweep bins must be 100 kHz..5 MHz"
+        );
+        ensure!(
+            ["am", "fm", "wfm"].contains(&self.listen_mode.as_str()),
+            "listen_mode must be am, fm, or wfm"
+        );
+        ensure!(
+            (3000..=200000).contains(&self.listen_bandwidth),
+            "listen_bandwidth must be 3000..200000 Hz"
+        );
+        ensure!(
+            self.squelch_dbfs.is_finite() && (-160.0..=0.0).contains(&self.squelch_dbfs),
+            "squelch_dbfs must be -160..0"
+        );
         ensure!(
             ["hackrf", "rtl", "audio", "demo"].contains(&self.device.as_str()),
             "device must be hackrf, rtl, audio, or demo"

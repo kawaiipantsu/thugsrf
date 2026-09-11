@@ -1,0 +1,9 @@
+api_version = 1
+name = "paging-id"
+kind = "identifiers"
+description = "Paging allocation context: POCSAG / FLEX candidates"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "paging-id"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3"]

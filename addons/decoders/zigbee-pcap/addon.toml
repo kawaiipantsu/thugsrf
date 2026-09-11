@@ -1,0 +1,9 @@
+api_version = 1
+name = "zigbee-pcap"
+kind = "decoders"
+description = "802.15.4 / ZigBee packet metadata: PAN IDs, short addresses, security flag"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "zigbee-pcap"]
+enabled = false
+timeout_seconds = 120
+formats = ["pcap", "pcapng"]
+requires = ["/usr/bin/python3", "tshark"]

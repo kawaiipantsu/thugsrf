@@ -1,0 +1,9 @@
+api_version = 1
+name = "adsb"
+kind = "decoders"
+description = "1090 MHz ADS-B extended squitter with strict CRC-24"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "adsb"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "hex"]
+requires = ["/usr/bin/python3"]

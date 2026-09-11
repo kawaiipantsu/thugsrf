@@ -18,6 +18,10 @@ pub struct Manifest {
     pub command: Vec<String>,
     #[serde(default)]
     pub enabled: bool,
+    #[serde(default)]
+    pub formats: Vec<String>,
+    #[serde(default)]
+    pub requires: Vec<String>,
     #[serde(default = "timeout")]
     pub timeout_seconds: u64,
 }
@@ -85,13 +89,27 @@ pub fn run(name: &str, request: &serde_json::Value) -> Result<serde_json::Value>
         a.manifest.enabled,
         "addon disabled; review its code then enable it with addon toggle {name}"
     );
+    if !a.manifest.formats.is_empty() {
+        let format = request["input"]["format"]
+            .as_str()
+            .context("input format missing")?;
+        ensure!(
+            a.manifest.formats.iter().any(|f| f == format),
+            "{} supports: {}",
+            name,
+            a.manifest.formats.join(", ")
+        );
+    }
     let mut cmd = Command::new(&a.manifest.command[0]);
     cmd.args(&a.manifest.command[1..])
         .current_dir(a.path.parent().context("addon directory")?)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
+    use std::os::unix::process::CommandExt;
+    cmd.process_group(0);
     let mut child = cmd.spawn().context("launching addon")?;
+    let _group = ProcessGroup(child.id());
     let mut input = child.stdin.take().context("addon stdin")?;
     let data = serde_json::to_vec(request)?;
     let writer = thread::spawn(move || input.write_all(&data));
@@ -111,10 +129,12 @@ pub fn run(name: &str, request: &serde_json::Value) -> Result<serde_json::Value>
                 return Err(e.into());
             }
         }
-        if start.elapsed() > Duration::from_secs(a.manifest.timeout_seconds) {
+        if crate::CANCELLED.load(std::sync::atomic::Ordering::Relaxed)
+            || start.elapsed() > Duration::from_secs(a.manifest.timeout_seconds)
+        {
             let _ = child.kill();
             let _ = child.wait();
-            anyhow::bail!("addon timed out");
+            anyhow::bail!("addon cancelled or timed out");
         }
         thread::sleep(Duration::from_millis(20));
     };
@@ -140,7 +160,135 @@ pub fn run(name: &str, request: &serde_json::Value) -> Result<serde_json::Value>
     Ok(result)
 }
 pub fn request(path: &Path, format: &str, rate: u32, center: u64) -> Result<serde_json::Value> {
+    let format = if format == "auto" {
+        match path.extension().and_then(|v| v.to_str()).unwrap_or("") {
+            "cs8" | "iq" => "cs8",
+            "cu8" => "cu8",
+            "wav" => "wav",
+            "pcap" => "pcap",
+            "pcapng" => "pcapng",
+            "nmea" => "nmea",
+            "ts" => "ts",
+            "hex" => "hex",
+            _ => anyhow::bail!("cannot infer format; use --format"),
+        }
+    } else {
+        format
+    };
     Ok(
         serde_json::json!({"api_version":1,"action":"analyze","input":{"path":path.canonicalize()?,"format":format,"sample_rate":rate,"center_hz":center}}),
     )
+}
+
+pub fn enable(name: &str, kind: Option<&str>, enabled: bool) -> Result<String> {
+    if let Some(kind) = kind {
+        ensure!(
+            ["decoders", "identifiers"].contains(&kind),
+            "kind must be decoders or identifiers"
+        );
+    }
+    let mut count = 0;
+    for a in list()? {
+        if (name == "all" || a.manifest.name == name) && kind.is_none_or(|k| k == a.manifest.kind) {
+            let mut m = a.manifest;
+            m.enabled = enabled;
+            std::fs::write(a.path, toml::to_string_pretty(&m)?)?;
+            count += 1;
+        }
+    }
+    ensure!(count > 0, "no matching addons installed");
+    Ok(format!("{count} addons enabled={enabled}"))
+}
+
+pub fn run_enabled(kind: &str, request: &serde_json::Value) -> Result<serde_json::Value> {
+    ensure!(
+        ["decoders", "identifiers"].contains(&kind),
+        "kind must be decoders or identifiers"
+    );
+    let modules: Vec<_> = list()?
+        .into_iter()
+        .filter(|a| a.manifest.enabled && a.manifest.kind == kind)
+        .collect();
+    ensure!(
+        !modules.is_empty(),
+        "no enabled {kind}; enable modules in the Addons tab or with addon enable all --kind {kind}"
+    );
+    let mut results = Vec::new();
+    for group in modules.chunks(3) {
+        ensure!(
+            !crate::CANCELLED.load(std::sync::atomic::Ordering::Relaxed),
+            "analysis cancelled"
+        );
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = group.iter().map(|a| scope.spawn(move || {
+                if !a.manifest.formats.is_empty() && !a.manifest.formats.iter().any(|f|request["input"]["format"] == *f) {
+                    return serde_json::json!({"module":a.manifest.name,"status":"skipped","reason":"unsupported input format"});
+                }
+                match run(&a.manifest.name, request) {
+                    Ok(result) => serde_json::json!({"module":a.manifest.name,"result":result}),
+                    Err(e) => serde_json::json!({"module":a.manifest.name,"status":"error","error":e.to_string()}),
+                }
+            })).collect();
+            for h in handles {
+                results.push(h.join().unwrap_or_else(
+                    |_| serde_json::json!({"status":"error","error":"addon worker panicked"}),
+                ));
+            }
+        });
+    }
+    Ok(serde_json::json!({"kind":kind,"input":request["input"],"results":results}))
+}
+
+// Kill owned descendants on timeout/cancellation as well as normal addon exit.
+struct ProcessGroup(u32);
+impl Drop for ProcessGroup {
+    fn drop(&mut self) {
+        let _ = Command::new("/bin/kill")
+            .args(["-KILL", "--", &format!("-{}", self.0)])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
+pub fn install() -> Result<String> {
+    let mut candidates = vec![
+        std::path::PathBuf::from("/usr/share/thugsrf/addons"),
+        std::path::PathBuf::from("/usr/local/share/thugsrf/addons"),
+    ];
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(root) = exe
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+    {
+        candidates.insert(0, root.join("addons"));
+    }
+    let source = candidates
+        .into_iter()
+        .find(|p| p.join("_shared/v0_2/runner.py").exists())
+        .context("bundled addons not found; run make addons from the source checkout")?;
+    fn copy(source: &std::path::Path, target: &std::path::Path) -> Result<usize> {
+        std::fs::create_dir_all(target)?;
+        let mut count = 0;
+        for entry in std::fs::read_dir(source)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            if name == "__pycache__" {
+                continue;
+            }
+            let to = target.join(name);
+            if entry.file_type()?.is_dir() {
+                count += copy(&entry.path(), &to)?;
+            } else if entry.file_type()?.is_file() && !to.exists() {
+                std::fs::copy(entry.path(), to)?;
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+    let count = copy(&source, &crate::config::config_dir())?;
+    Ok(format!(
+        "Installed {count} bundled files; existing user files preserved. Enable modules in Addons or with addon enable."
+    ))
 }

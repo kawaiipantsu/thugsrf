@@ -1,0 +1,9 @@
+api_version = 1
+name = "gnss-id"
+kind = "identifiers"
+description = "GPS / Galileo GNSS frequency context"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "gnss-id"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3"]

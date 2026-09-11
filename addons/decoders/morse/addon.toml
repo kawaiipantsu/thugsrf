@@ -1,0 +1,9 @@
+api_version = 1
+name = "morse"
+kind = "decoders"
+description = "Morse/CW text from audio or centered CW IQ"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "morse"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3", "multimon-ng"]

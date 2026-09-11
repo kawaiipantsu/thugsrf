@@ -1,0 +1,9 @@
+api_version = 1
+name = "chirp-id"
+kind = "identifiers"
+description = "Repeated linear chirp candidates (LoRa, radar or other chirped waveforms)"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "chirp-id"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8"]
+requires = ["/usr/bin/python3"]

@@ -1,0 +1,9 @@
+api_version = 1
+name = "eas"
+kind = "decoders"
+description = "EAS/SAME broadcast alert messages"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "eas"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3", "multimon-ng"]

@@ -1,0 +1,9 @@
+api_version = 1
+name = "weather-id"
+kind = "identifiers"
+description = "Weather sensor and radiosonde allocation candidates"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "weather-id"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3"]

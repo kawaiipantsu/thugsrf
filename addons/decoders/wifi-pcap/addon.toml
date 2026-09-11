@@ -1,0 +1,9 @@
+api_version = 1
+name = "wifi-pcap"
+kind = "decoders"
+description = "802.11 packet metadata, SSIDs, addresses and protection flags"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "wifi-pcap"]
+enabled = false
+timeout_seconds = 120
+formats = ["pcap", "pcapng"]
+requires = ["/usr/bin/python3", "tshark"]

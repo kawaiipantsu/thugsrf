@@ -1,4 +1,4 @@
-.TH THUGSRF 1 "September 2026" "THUGS(red) RF 0.1.1"
+.TH THUGSRF 1 "September 2026" "THUGS(red) RF 0.2.0"
 .SH NAME
 thugsrf \- modular radio signal intelligence workbench
 .SH SYNOPSIS
@@ -24,7 +24,7 @@ Capture a finite range of center frequencies.
 .B decode INPUT --mode ook|fsk
 Extract raw OOK envelope timings or instantaneous frequency.
 .TP
-.B addon list|toggle|run
+.B addon install|list|enable|disable|toggle|run|run-enabled
 Manage language-neutral executable JSON addons.
 .TP
 .B encode OUTPUT --bits 1010 --mode ook|afsk
@@ -47,6 +47,29 @@ Validate and persist a user setting. Use the TUI to edit interactively.
 .TP
 .B history [--export ID]
 List investigations or export a stored JSON report.
+.TP
+.B export-pcap INPUT OUTPUT --protocol ble|ax25|gsm
+Decode recovered protocol frames to PCAP and a provenance sidecar.
+.TP
+.B identify INPUT
+Run enabled compatible identifiers concurrently and save their evidence.
+.TP
+.B listen --frequency HZ --mode am|fm|wfm --bandwidth HZ
+Listen through ALSA. TUI tab 8 provides SW/MW and FM presets.
+.TP
+.B talk --frequency HZ --seconds N --confirm-tx
+Finite HackRF microphone AM/FM transmission; at most 60 seconds.
+.TP
+.B channels [add|set|remove]
+Manage the local channel and repeater directory. TUI tab 9 lists entries.
+.TP
+.B sigid sync|status|lookup
+Sync factual SigID Wiki metadata and rank reference candidates offline.
+.TP
+.B frequency sources|import|lookup
+Import sourced HTML/CSV frequency references and look up channel hints.
+.PP
+TUI tab 7 provides a sequential 1 MHz to 6 GHz HackRF sweep panorama.
 .SH FILES
 ~/.config/thugsrf/config.toml
 .br

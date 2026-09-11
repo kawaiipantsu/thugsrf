@@ -1,0 +1,9 @@
+api_version = 1
+name = "gps-nmea"
+kind = "decoders"
+description = "Checksum-validated GPS/GNSS receiver NMEA sentences"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "gps-nmea"]
+enabled = false
+timeout_seconds = 120
+formats = ["nmea"]
+requires = ["/usr/bin/python3"]

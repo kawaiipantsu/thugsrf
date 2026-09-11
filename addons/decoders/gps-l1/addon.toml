@@ -1,0 +1,9 @@
+api_version = 1
+name = "gps-l1"
+kind = "decoders"
+description = "GPS L1 C/A acquisition, tracking and navigation using GNSS-SDR"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "gps-l1"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8"]
+requires = ["/usr/bin/python3", "gnss-sdr"]

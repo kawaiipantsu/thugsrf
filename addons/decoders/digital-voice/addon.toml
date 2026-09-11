@@ -1,0 +1,9 @@
+api_version = 1
+name = "digital-voice"
+kind = "decoders"
+description = "DMR / D-Star / dPMR / YSF metadata with DSDcc"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "digital-voice"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3", "dsdccx"]

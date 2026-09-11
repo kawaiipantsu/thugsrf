@@ -1,0 +1,9 @@
+api_version = 1
+name = "bluetooth-id"
+kind = "identifiers"
+description = "Bluetooth/BLE band context or actual packet metadata"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "bluetooth-id"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav", "pcap", "pcapng"]
+requires = ["/usr/bin/python3", "tshark"]

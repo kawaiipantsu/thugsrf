@@ -1,0 +1,9 @@
+api_version = 1
+name = "morse-id"
+kind = "identifiers"
+description = "Morse/CW mark timing and estimated speed"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "morse-id"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3"]

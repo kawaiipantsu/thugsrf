@@ -41,3 +41,15 @@ This verification does not assert universal protocol recognition, calibrated sig
 On 2026-09-11, a direct HackRF test reproduced an intermittent startup failure: `Couldn't transfer any bytes for one second.` The first of three attempts failed, and the next two delivered samples. The two-line TUI status previously hid this diagnostic beneath the startup messages.
 
 The live receiver now retries only that specific failure before any data has arrived, up to three attempts, and displays final errors with exit status in the Workbench. `scripts/receiver-smoke.py` tests recovery, exhaustion, busy-device failure and failure after samples arrive using a fake child process in an actual PTY. Three successive physical HackRF start/save/stop cycles also passed. No firmware change was made; this release handles the observed transient startup condition rather than claiming its underlying USB/firmware cause has been eliminated.
+
+## 0.2.0 protocol, survey and audio expansion
+
+`make check` and `make test` pass, including all nine TUI panels at 80×24 and 170×50. New offline checks cover a known ADS-B callsign and PPM fixture, checksum-valid NMEA, independently generated AX.25, POCSAG BCH/parity/alpha audio decoded by multimon-ng, BLE advertising CRC/name recovery and Wireshark rejection of a corrupt CRC, empty PCAP negatives, waveform-identifier paths and source-preserving frequency imports.
+
+Fake-device audio tests recover a 1 kHz tone through live AM/NFM/WFM demodulation, verify finite AM/FM microphone IQ, reject unconfirmed TX and surface child-process errors. The actual connected HackRF completed a passive 1–6000 MHz sweep in approximately 0.75 seconds at 1 MHz bin resolution, and a two-second 100 MHz WFM capture streamed through the audio DSP into ALSA `null` successfully. The Survey README screenshot is an actual passive measurement. No RF transmission or private decoded payload was recorded for publication.
+
+Satellite, GSM, digital voice, marine ATIS and GPS L1 backend integrations still need clean protocol-reference captures for end-to-end validation; see the capability matrix. Source-import parsing was tested with synthetic HTML/CSV, not fetched DKScan data.
+
+PCAP exports of BLE and AX.25 frames were independently dissected by Wireshark/tshark. A malformed BLE CRC was flagged by Wireshark. GSMTAP IPv4/UDP framing and an empty GSM flowgraph were checked without network capture or RF transmission.
+
+`scripts/reference-smoke.py` tests transactional SigID pagination/ranking/failure retention and suspicious-unit handling using mocked API data, plus actual Wireshark parsing of synthetic GSM cipher/identity/SI3 packets and masked IMSI/baseline behavior. A real API sync imported 586 usable SigID Wiki entries into the local user database; article prose and media were not copied.

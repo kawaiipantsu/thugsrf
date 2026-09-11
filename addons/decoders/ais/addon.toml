@@ -1,0 +1,9 @@
+api_version = 1
+name = "ais"
+kind = "decoders"
+description = "AIS A/B messages, MMSI and positions from IQ, audio or NMEA"
+command = ["/usr/bin/python3", "../../_shared/v0_2/runner.py", "ais"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav", "nmea"]
+requires = ["/usr/bin/python3", "atest"]
