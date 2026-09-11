@@ -1,0 +1,7 @@
+api_version = 1
+name = "band-context"
+kind = "identifiers"
+description = "Offline European frequency context; allocation hints are not protocol identification"
+command = ["python3", "identify.py"]
+enabled = false
+timeout_seconds = 5

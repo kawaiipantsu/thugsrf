@@ -1,0 +1,7 @@
+api_version = 1
+name = "ook-pulses"
+kind = "decoders"
+description = "Example Python addon: amplitude envelope pulse durations from cs8/cu8 IQ"
+command = ["python3", "decode.py"]
+enabled = false
+timeout_seconds = 10

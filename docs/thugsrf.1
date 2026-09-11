@@ -1,0 +1,61 @@
+.TH THUGSRF 1 "September 2026" "THUGS(red) RF 0.1.0"
+.SH NAME
+thugsrf \- modular radio signal intelligence workbench
+.SH SYNOPSIS
+.B thugsrf
+[--device hackrf|rtl|audio|demo] [--frequency HZ] [--sample-rate HZ] [COMMAND]
+.SH DESCRIPTION
+Native Linux Rust CLI and full-color terminal UI for HackRF, RTL-SDR and ALSA.
+Run without a command to open the TUI. Space starts passive reception.
+.SH COMMANDS
+.TP
+.B doctor
+Inspect SDR and audio devices.
+.TP
+.B record OUTPUT --seconds N
+Capture finite IQ or audio. Existing files are never overwritten.
+.TP
+.B analyze INPUT --format cs8|cu8|wav --png OUTPUT
+Compute FFT spectra and signal candidates, save to SQLite and optionally export PNG.
+.TP
+.B scan --start HZ --end HZ --step HZ
+Capture a finite range of center frequencies.
+.TP
+.B decode INPUT --mode ook|fsk
+Extract raw OOK envelope timings or instantaneous frequency.
+.TP
+.B addon list|toggle|run
+Manage language-neutral executable JSON addons.
+.TP
+.B encode OUTPUT --bits 1010 --mode ook|afsk
+Generate an IQ or WAV file without transmitting it.
+.TP
+.B demod INPUT OUTPUT --mode am|fm
+Demodulate centered IQ into WAV.
+.TP
+.B replay INPUT --confirm-tx
+Transmit a finite cs8 recording with HackRF.
+.TP
+.B play INPUT
+Play WAV using ALSA.
+.TP
+.B ai --input INPUT | --image IMAGE
+Explicitly submit measured features or images to the configured AI endpoint.
+.TP
+.B config set KEY VALUE
+Validate and persist a user setting. Use the TUI to edit interactively.
+.TP
+.B history [--export ID]
+List investigations or export a stored JSON report.
+.SH FILES
+~/.config/thugsrf/config.toml
+.br
+~/.config/thugsrf/decoders/*/addon.toml
+.br
+~/.config/thugsrf/identifiers/*/addon.toml
+.br
+~/.local/share/thugsrf/investigations.sqlite3
+.PP
+XDG_CONFIG_HOME and XDG_DATA_HOME override the default roots.
+.SH AUTHOR
+Kawaiipantsu from THUGS(red), a Danish hacking community. https://thugs.red

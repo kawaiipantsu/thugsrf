@@ -1,0 +1,32 @@
+[package]
+name = "thugsrf"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+authors = ["Kawaiipantsu / THUGS(red)"]
+description = "THUGS(red) RF — modular radio signal intelligence workbench"
+homepage = "https://thugs.red"
+repository = "https://github.com/kawaiipantsu/thugsrf"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.29"
+ratatui = "0.30"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+rustfft = "6"
+hound = "3"
+rusqlite = { version = "0.40", features = ["bundled"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
+base64 = "0.23"
+png = "0.18"
+shlex = "2"
+ctrlc = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

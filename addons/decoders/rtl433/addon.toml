@@ -1,0 +1,7 @@
+api_version = 1
+name = "rtl433"
+kind = "decoders"
+description = "rtl_433 offline protocol decoder for supported ISM sensors (first 32 million IQ samples)"
+command = ["python3", "decode.py"]
+enabled = false
+timeout_seconds = 60

@@ -1,0 +1,17 @@
+# Architecture and limits
+
+`main.rs` owns the clap command interface shared with the TUI command bar. `config.rs` validates TOML settings and resolves XDG directories. `radio.rs` runs distribution hardware tools as child processes. This keeps USB support aligned with the maintained HackRF/RTL-SDR host libraries and avoids unstable plugin or driver ABIs.
+
+The live receiver has a dedicated pipe reader, a bounded two-block channel, a DSP worker, and a bounded two-frame UI channel. USB data is drained continuously; blocks can be discarded before display processing. The waterfall is a visual sample of activity, not a lossless recording or a continuously exhaustive detector. At most about 16 FFTs/second are analyzed. A separate finite recording command captures full-rate samples to disk. Source processes are killed and reaped when a live stream closes. The UI pauses live reception before a workbench job.
+
+FFT analysis uses a Hann window and subtracts the frame mean, so a carrier exactly at DC is intentionally suppressed. Bin spacing is sample_rate / FFT_size. Threshold detections group adjacent above-noise bins; reported widths are approximate. Small windows cannot resolve narrow signals within a very wide HackRF passband. Signals need sufficient signal-to-noise ratio, appropriate front-end gain, sample rate, and antenna. There is no calibrated dBm, channelizer, automatic symbol synchronization, or universal modulation classifier.
+
+File analysis is capped at 4,194,304 samples and averages non-overlapping FFT power spectra. Detection candidates are taken from the strongest frame; RMS/noise/crest describe the first frame. Builtin raw decoding is capped at 2 million samples; basic AM/FM demodulation is capped at 16 million. OOK uses a fixed fraction of maximum envelope amplitude. AFSK generation uses continuous phase 1200/2200 Hz tones and integer samples per bit. These are explicit initial DSP building blocks.
+
+RF files use interleaved ci8/cu8 samples and an accompanying SigMF-style JSON sidecar. Arbitrary filenames are supported; external SigMF readers may require renaming the data to `.sigmf-data` beside its `.sigmf-meta`. Audio uses WAV and a `.wav.json` metadata sidecar rather than raw SigMF data. RF consumers can inspect `thugsrf:format`. The application currently requires users to provide RF format, sample rate and center frequency on analysis/replay; it does not silently infer those from extensions or sidecars. WAV sample rates are read from the file.
+
+SQLite stores reports and findings as structured JSON with an indexed primary key and creation time. Raw recordings stay as editable/exportable files. Reports can be exported through `history --export`. The database schema is version 1. No destructive schema migration is implemented.
+
+AI receives numeric features and optionally supplied PNG/JPEG images. There is no direct audio-model endpoint, transcription, automatic image synthesis, or live OSINT crawler. Provider requests have deadlines and bounded responses. They execute only on user request; credentials remain environment variables. Results are hypotheses and never drive a transmitter.
+
+The package is native-architecture, dynamically linked against libc/libgcc, with SQLite and Rust TLS included. Building on a newer distribution can raise the minimum glibc requirement; build on the oldest target distribution for broader compatibility. The checked-in compiler pin and Cargo.lock provide repeatable dependency selection; fully bit-identical builds are not asserted.

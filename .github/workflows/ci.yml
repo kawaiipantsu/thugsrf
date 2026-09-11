@@ -1,0 +1,19 @@
+name: build
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.98.1 --profile minimal --component clippy --component rustfmt
+      - name: Check
+        run: make check
+      - name: Release and integration tests
+        run: make build test deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thugsrf-linux-debian
+          path: dist/*.deb

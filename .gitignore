@@ -1,0 +1,9 @@
+/target/
+/dist/
+*.iq
+*.cu8
+*.cs8
+*.wav
+*.sqlite*
+.env
+/.local/
