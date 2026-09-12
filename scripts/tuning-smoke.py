@@ -65,6 +65,24 @@ while True:
             key(seq)
             expected.append(hz)
             assert frequencies() == expected, frequencies()
+        # Direct frequency entry consumes digits/units rather than panel shortcuts.
+        key(b'\r146.125MHz\r')
+        expected.append(146125000)
+        assert frequencies() == expected, frequencies()
+        key(b'\rnot-a-frequency\r')
+        key(b'\r150MHz\x1b')
+        assert frequencies() == expected, frequencies()
+        # Zoom, palette, waterfall threshold and listening filters leave RF capture running.
+        key(b']]]0c++-mb25kHz\r')
+        assert frequencies() == expected, frequencies()
+        key(b'f')
+        expected.append(146125000)
+        assert frequencies() == expected, frequencies()
+        # SGR mouse click on the trace, then tune the selected bin.
+        key(b'\x1b[<0;40;7M\x1b[<0;40;7m')
+        key(b't')
+        assert len(frequencies()) == len(expected) + 1, frequencies()
+        expected = frequencies()
         key(b' ')
         key(b'\x1b[C')
         assert frequencies() == expected
@@ -72,7 +90,7 @@ while True:
         key(b'q')
         assert process.wait(timeout=5) == 0
         assert b'frequency = 145252000' in cli('config').stdout  # session tuning is not persisted
-        print('PASS: Spectrum fine/coarse keys, custom steps, live restart without overlap, stopped tuning, persistence')
+        print('PASS: Spectrum fine/coarse keys, direct entry, mouse tune, zoom/filter keys, FFT changes, custom steps, live restart without overlap, stopped tuning, persistence')
     finally:
         if process.poll() is None:
             process.kill()

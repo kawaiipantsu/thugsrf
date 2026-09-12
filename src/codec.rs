@@ -2,6 +2,9 @@ use crate::dsp;
 use anyhow::{Result, ensure};
 use std::{io::Write, path::Path};
 pub fn decode(path: &Path, format: &str, rate: u32, mode: &str) -> Result<String> {
+    if mode == "rds" {
+        return decode_rds(path, format, rate);
+    }
     let (s, r) = dsp::read_samples(path, format, 2_000_000)?;
     let rate = r.unwrap_or(rate);
     ensure!(!s.is_empty(), "empty recording");
@@ -38,7 +41,9 @@ pub fn decode(path: &Path, format: &str, rate: u32, mode: &str) -> Result<String
                 .collect();
             serde_json::json!({"decoder":"fsk-discriminator","instantaneous_hz":frequencies,"note":"Unfiltered phase discriminator; not synchronized protocol bits."})
         }
-        _ => anyhow::bail!("builtin decoder must be ook or fsk; use addon run for protocol addons"),
+        _ => anyhow::bail!(
+            "builtin decoder must be ook, fsk or rds; use addon run for protocol addons"
+        ),
     };
     Ok(serde_json::to_string_pretty(&result)?)
 }
@@ -141,4 +146,78 @@ pub fn demod(path: &Path, output: &Path, format: &str, rate: u32, mode: &str) ->
         "Wrote {} Hz mono WAV; tune the carrier to center before demodulation. Basic single-pole audio filter; input limited to 16 million samples.",
         out_rate
     ))
+}
+
+fn decode_rds(path: &Path, format: &str, rate: u32) -> Result<String> {
+    use std::{
+        io::Read,
+        process::{Command, Stdio},
+        sync::atomic::Ordering,
+        thread,
+        time::{Duration, Instant},
+    };
+    let spec = serde_json::json!({"path":path,"format":format,"rate":rate});
+    let helper = format!(
+        "{}\n{}",
+        include_str!("../addons/_shared/v0_2/rds.py"),
+        r#"
+import signal, sys
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(1))
+signal.signal(signal.SIGALRM, lambda *_: sys.exit('RDS decode timed out'))
+signal.alarm(120)
+try:
+    print(json.dumps(decode_rds_file(json.loads(sys.argv[1]))))
+except Exception as exc:
+    sys.exit(str(exc))
+"#
+    );
+    let mut child = Command::new("/usr/bin/python3")
+        .args(["-c", &helper, &spec.to_string()])
+        .env("OPENBLAS_NUM_THREADS", "1")
+        .env("OMP_NUM_THREADS", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let output = thread::spawn(move || {
+        let mut b = Vec::new();
+        stdout.take(1_048_577).read_to_end(&mut b).map(|_| b)
+    });
+    let errors = thread::spawn(move || {
+        let mut b = Vec::new();
+        stderr.take(8192).read_to_end(&mut b).map(|_| b)
+    });
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if crate::CANCELLED.load(Ordering::Relaxed) || started.elapsed() > Duration::from_secs(135)
+        {
+            let _ = Command::new("kill")
+                .args(["-TERM", &child.id().to_string()])
+                .status();
+            // The Python handler closes its owned decoder before exiting.
+            let deadline = Instant::now() + Duration::from_secs(12);
+            while child.try_wait()?.is_none() && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(20));
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+            anyhow::bail!("RDS decoding cancelled or timed out");
+        }
+        thread::sleep(Duration::from_millis(20));
+    };
+    let data = output
+        .join()
+        .map_err(|_| anyhow::anyhow!("RDS output reader failed"))??;
+    let error = errors
+        .join()
+        .map_err(|_| anyhow::anyhow!("RDS diagnostic reader failed"))??;
+    ensure!(status.success(), "{}", String::from_utf8_lossy(&error));
+    ensure!(data.len() <= 1_048_576, "RDS output exceeds 1 MiB");
+    let result: serde_json::Value = serde_json::from_slice(&data)?;
+    Ok(serde_json::to_string_pretty(&result)?)
 }

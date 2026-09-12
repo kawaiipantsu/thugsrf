@@ -69,7 +69,7 @@ with tempfile.TemporaryDirectory(prefix='thugsrf-rx-test-') as temp:
             drain(2.3)
             assert int(counter.read_text()) == expected, (mode, counter.read_text())
             if mode == 'recover':
-                os.write(master, b's')
+                os.write(master, b'2s')
                 drain(.2)
                 with sqlite3.connect(case/'data/thugsrf/investigations.sqlite3') as db:
                     assert db.execute("SELECT COUNT(*) FROM reports WHERE source='hackrf'").fetchone()[0] > 0

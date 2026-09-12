@@ -188,7 +188,9 @@ pub fn analyze_file(
     threshold: f32,
 ) -> Result<Report> {
     let (samples, wav_rate) = read_samples(path, format, 4_194_304)?;
-    ensure!(samples.len() >= n, "need at least {n} samples");
+    ensure!(samples.len() >= 256, "need at least 256 samples");
+    let requested_n = n;
+    let n = n.min(1usize << samples.len().ilog2());
     let mut a = Analyzer::new(n);
     let mut report = a.analyze(
         &samples[..n],
@@ -224,6 +226,11 @@ pub fn analyze_file(
     }
     report.spectrum_dbfs = power.iter().map(|p| db(p / count as f32)).collect();
     report.samples = samples.len();
+    if n < requested_n {
+        report.notes.push(format!(
+            "Short recording: using {n} FFT bins instead of requested {requested_n}."
+        ));
+    }
     report.notes.push(format!("Spectrum averages {count} frames; detections retain the strongest frame. File analysis capped at 4194304 samples; RMS/noise/crest describe first frame."));
     Ok(report)
 }

@@ -102,6 +102,7 @@ pub enum StreamEvent {
 pub struct Stream {
     pub frames: Receiver<Report>,
     pub events: Receiver<StreamEvent>,
+    pub decoders: crate::live::Decoder,
     stop: Arc<AtomicBool>,
     worker: Option<thread::JoinHandle<()>>,
 }
@@ -111,13 +112,16 @@ impl Drop for Stream {
         if let Some(w) = self.worker.take() {
             let _ = w.join();
         }
+        self.decoders.join();
     }
 }
 impl Stream {
-    pub fn start(c: Config) -> Result<Self> {
+    pub fn start(c: Config, decoding: bool) -> Result<Self> {
         c.validate()?;
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
+        let decoders = crate::live::Decoder::start(c.clone(), stop.clone(), decoding);
+        let tap = decoders.tap.clone();
         let (tx, frames) = mpsc::sync_channel(2);
         let (events_tx, events) = mpsc::channel();
         let worker = thread::spawn(move || {
@@ -152,7 +156,7 @@ impl Stream {
                 if flag.load(Ordering::Relaxed) {
                     return;
                 }
-                let result = receive_attempt(&c, &flag, &tx, &events_tx);
+                let result = receive_attempt(&c, &flag, &tx, &events_tx, &tap);
                 if flag.load(Ordering::Relaxed) {
                     return;
                 }
@@ -189,6 +193,7 @@ impl Stream {
         Ok(Self {
             frames,
             events,
+            decoders,
             stop,
             worker: Some(worker),
         })
@@ -200,6 +205,7 @@ fn receive_attempt(
     stop: &AtomicBool,
     frames: &mpsc::SyncSender<Report>,
     events: &mpsc::Sender<StreamEvent>,
+    tap: &crate::live::Tap,
 ) -> Result<(bool, String)> {
     let mut child = ChildGuard(
         command(c, "-", None)?
@@ -229,7 +235,9 @@ fn receive_attempt(
     let block_bytes = (c.fft_size * 2).max(65536);
     let seen_data = Arc::new(AtomicBool::new(false));
     let reader_seen = seen_data.clone();
+    let tap = tap.clone();
     let reader = thread::spawn(move || -> std::io::Result<()> {
+        let mut pending = Vec::new();
         loop {
             let mut bytes = vec![0; block_bytes];
             let mut offset = 0;
@@ -244,6 +252,7 @@ fn receive_attempt(
                     Err(e) => return Err(e),
                 }
             }
+            tap.push(&bytes, &mut pending);
             if let Err(mpsc::TrySendError::Disconnected(_)) = raw_tx.try_send(bytes) {
                 return Ok(());
             }
@@ -456,6 +465,7 @@ pub fn doctor() -> String {
         ("rtl_test", vec!["-t"]),
         ("aplay", vec!["-l"]),
         ("arecord", vec!["-l"]),
+        ("redsea", vec!["--version"]),
     ] {
         result.push_str(&format!("\n━━ {program} ━━\n"));
         match Command::new("timeout")

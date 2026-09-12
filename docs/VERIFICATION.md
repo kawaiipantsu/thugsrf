@@ -1,4 +1,4 @@
-# Verification — initial 0.1.0 release
+# Verification and test coverage
 
 Verified on Debian GNU/Linux 13 (amd64), 2026-09-11, using Rust 1.98.1 and the locked dependencies. No RF transmission was performed during verification.
 
@@ -53,3 +53,13 @@ Satellite, GSM, digital voice, marine ATIS and GPS L1 backend integrations still
 PCAP exports of BLE and AX.25 frames were independently dissected by Wireshark/tshark. A malformed BLE CRC was flagged by Wireshark. GSMTAP IPv4/UDP framing and an empty GSM flowgraph were checked without network capture or RF transmission.
 
 `scripts/reference-smoke.py` tests transactional SigID pagination/ranking/failure retention and suspicious-unit handling using mocked API data, plus actual Wireshark parsing of synthetic GSM cipher/identity/SI3 packets and masked IMSI/baseline behavior. A real API sync imported 586 usable SigID Wiki entries into the local user database; article prose and media were not copied.
+
+## 0.3.0 interactive decoding and exports
+
+Rust coverage includes zoomed mouse-to-frequency mapping, peak-preserving waterfall reduction, contiguous raw capture windows, event/error handling, bounded console previews and native-bin ASCII graph rendering. Strict Clippy and formatting checks apply.
+
+`scripts/tuning-smoke.py` exercises direct frequency entry, mouse tuning, zoom and filter keys, FFT restarts and exclusive receiver ownership through a real PTY and a fake radio. `scripts/tui-smoke.py` checks both terminal layouts and exports with 8192 data columns (independent of screen width). `scripts/live-decoders-smoke.py` verifies two concurrent decoder outputs in one console, exact sample-window sizes, retune metadata, pause/resume, start/stop/new-file logging, and prompt cleanup of a deliberately slow decoder and its subprocess.
+
+RDS validation uses redsea 1.3.0 with its upstream MPX fixture `mpx-testfile-yksi.flac` (SHA256 `c92b9c72f132e37cbe253a19a6ae17c52f17f5318672c391ce7f3b9657320eb1`). The fixture decodes PI `0x6201` and programme type `Serious classical`; generated signed and unsigned FM IQ also decodes that PI. A fake RTL source and audio sink exercise the actual live WFM path. Run `scripts/rds-smoke.py` with a mono 16-bit WAV conversion of that fixture to repeat the positive decoder checks. Without a fixture, the standard suite checks low-rate audio rejection and DSP block-boundary consistency.
+
+These changes have not been verified with over-the-air AIS/RDS reception. The live addon console uses finite best-effort windows, and decoder success depends on signal quality, capture bandwidth and backend capabilities. No RF transmission was performed for this release.

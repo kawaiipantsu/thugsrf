@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory(prefix='thugsrf-hardware-') as temp:
             if select.select([master],[],[],.05)[0]:
                 try: os.read(master,65536)
                 except OSError: break
-    drain(.2);os.write(master,b' ');drain(2);os.write(master,b's');drain(.2);os.write(master,b'q');drain(.3)
+    drain(.2);os.write(master,b' ');drain(2);os.write(master,b'2s');drain(.2);os.write(master,b'q');drain(.3)
     assert p.wait(timeout=5)==0
     os.close(master);os.close(slave)
     db=sqlite3.connect(tmp/'data/thugsrf/investigations.sqlite3')

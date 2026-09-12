@@ -2,6 +2,7 @@
 import json, os, signal, subprocess, sys, time, math, traceback
 from pathlib import Path
 children=[]
+rds_decoder=None
 def stop(*_):
     for p in children:
         if p.poll() is None: p.terminate()
@@ -21,6 +22,7 @@ def spawn(args,**kw):
     p=subprocess.Popen(args,stderr=log,**kw);children.append(p);return p
 
 def main():
+    global rds_decoder
     import numpy as np
     from scipy import signal as dsp
     rate=int(c['sample_rate']); seconds=spec['seconds']; tx=spec['tx']; mode=c['listen_mode']
@@ -40,7 +42,7 @@ def main():
             audio=np.clip(audio,-0.95,0.95)
             count=round(len(audio)*rate/audio_rate)
             up=np.interp(np.arange(count)*audio_rate/rate,np.arange(len(audio)+1),np.r_[previous,audio]);previous=audio[-1]
-            if spec['tone'] and mode=='fm': up=0.85*up+0.15*np.sin(2*np.pi*spec['tone']*(np.arange(count)+pos)/rate)
+            if spec['tone'] and mode in ('fm','nfm'): up=0.85*up+0.15*np.sin(2*np.pi*spec['tone']*(np.arange(count)+pos)/rate)
             if mode=='am': iq=(0.45*(1+0.8*up)).astype(np.complex128)
             else:
                 deviation=min(2500.,c['listen_bandwidth']/5)
@@ -64,6 +66,11 @@ def main():
         while current>480000:
             factor=4 if current/4>=240000 else 2
             sos=dsp.butter(6,0.8/factor,output='sos');stages.append([sos,np.zeros((len(sos),2),complex),factor,0]);current/=factor
+        if mode=='wfm':
+            try:
+                rds_decoder=RdsDecoder(current, lambda event: print(json.dumps(event), flush=True))
+            except Exception as exc:
+                print(json.dumps({'rds_status':str(exc)}),flush=True)
         chan=dsp.butter(6,min(c['listen_bandwidth']/2,current*0.45),fs=current,output='sos');ci=np.zeros((len(chan),2),complex)
         af=dsp.butter(5,15000 if mode=='wfm' else min(4500,c['listen_bandwidth']/2),fs=current,output='sos');ai=np.zeros((len(af),2))
         prev=1+0j; dc=0.; gain=1.; offset=0.; deemphasis=0.
@@ -83,6 +90,14 @@ def main():
             power=10*np.log10(float(np.mean(np.abs(iq)**2))+1e-16)
             if mode=='am': audio=np.abs(iq)
             else: audio=np.angle(iq*np.conj(np.r_[prev,iq[:-1]]));prev=iq[-1]
+            if rds_decoder is not None:
+                try:
+                    rds_decoder.push(audio/np.pi)
+                except (BrokenPipeError, OSError) as exc:
+                    print(json.dumps({'rds_status':'RDS decoder stopped: '+str(exc)}),flush=True)
+                    try: rds_decoder.close()
+                    except Exception: pass
+                    rds_decoder=None
             dc=0.95*dc+0.05*float(np.mean(audio));audio-=dc
             audio,ai=dsp.sosfilt(af,audio,zi=ai)
             if mode=='wfm':
@@ -102,6 +117,9 @@ except SystemExit: pass
 except Exception:
     traceback.print_exc(file=log);sys.exit(1)
 finally:
+    if rds_decoder is not None:
+        try: rds_decoder.close()
+        except Exception as exc: print(json.dumps({'rds_status':str(exc)}),flush=True)
     for p in children:
         if p.poll() is None: p.terminate()
     for p in children:

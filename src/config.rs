@@ -40,7 +40,7 @@ impl Default for Config {
             rtl_gain: 200,
             serial: String::new(),
             audio_device: "default".into(),
-            fft_size: 2048,
+            fft_size: 8192,
             threshold_db: 12.0,
             ai_provider: "local".into(),
             ai_model: String::new(),
@@ -110,8 +110,8 @@ impl Config {
             "sweep bins must be 100 kHz..5 MHz"
         );
         ensure!(
-            ["am", "fm", "wfm"].contains(&self.listen_mode.as_str()),
-            "listen_mode must be am, fm, or wfm"
+            ["am", "fm", "nfm", "wfm"].contains(&self.listen_mode.as_str()),
+            "listen_mode must be am, fm, nfm, or wfm"
         );
         ensure!(
             (3000..=200000).contains(&self.listen_bandwidth),

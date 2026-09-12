@@ -11,7 +11,7 @@ thugsrf addon run pocsag pager.wav --options '{"invert":true}'
 thugsrf addon run-enabled recording.cs8 --kind decoders
 ```
 
-`identify` and `addon run-enabled` run up to three compatible modules concurrently, skip incompatible formats, retain per-module errors and save the combined result to SQLite. Activation does not silently start live decoding; these commands process existing files. Set sample rate and capture center correctly: the addon API does not automatically read SigMF sidecars. `--format auto` recognizes cs8/cu8/wav/pcap/pcapng/nmea/ts/hex extensions. WAV sample rate comes from its header.
+`identify` and `addon run-enabled` run up to three compatible modules concurrently, skip incompatible formats, retain per-module errors and save the combined result to SQLite. In the TUI, enabled compatible decoders also run against incoming Spectrum samples while reception is active. Press `d` for their shared rolling console, `D` to pause/resume addon decoding, `s` to toggle log saving, and `x` to clear the console. CLI `addon run` and `addon run-enabled` process existing files. Set sample rate and capture center correctly: the addon API does not automatically read SigMF sidecars. `--format auto` recognizes cs8/cu8/wav/pcap/pcapng/nmea/ts/hex extensions. WAV sample rate comes from its header.
 
 Each module can have editable `options.toml`; per-run `--options` JSON overrides it. IQ narrowband adapters accept `channel_hz` for a carrier inside the recording. Ordinary waveform adapters inspect at most 8 million samples, while text/packet/output limits are separately bounded. Split long recordings into useful segments; no-result is a valid outcome and a decoder's output may still require validation.
 
@@ -20,6 +20,7 @@ Each module can have editable `options.toml`; per-run `--options` JSON overrides
 | `gsm-security` | identifiers | pcap, pcapng | Passive A5/GEA signalling, masked IMSI visibility, identity requests and cell baseline |
 | `sigid-id` | identifiers | cs8, cu8 | Offline SigID Wiki reference ranking by frequency, bandwidth and optional modulation |
 | `adsb` | decoders | cs8, cu8, hex | 1090 MHz ADS-B extended squitter with strict CRC-24 |
+| `rds` | decoders | cs8, cu8, wav | Broadcast FM RDS station name, RadioText, PI and programme data via redsea |
 | `ais` | decoders | cs8, cu8, wav, nmea | AIS A/B messages, MMSI and positions from IQ, audio or NMEA |
 | `atis-symbols` | decoders | cs8, cu8, wav | Marine ATIS/DSC checked symbols (partial framing, not full vessel ID) |
 | `aviation-atis-id` | identifiers | cs8, cu8, wav | Aviation AM / voice ATIS service context |
@@ -88,3 +89,7 @@ Frequency-context matches are weak clues. Burst/chirp/Morse/OFDM-like patterns a
 Source references include [multimon-ng](https://github.com/EliasOenal/multimon-ng), [Dire Wolf](https://github.com/wb2osz/direwolf), [Bluetooth Core](https://www.bluetooth.com/specifications/specs/core-specification/), [GNSS-SDR](https://gnss-sdr.org/), [gr-gsm](https://github.com/ptrkrysik/gr-gsm), [SatDump](https://github.com/SatDump/SatDump), and [Wireshark](https://www.wireshark.org/docs/). Allocation-source management is documented in [FREQUENCIES.md](FREQUENCIES.md).
 
 See [SIGID.md](SIGID.md) for reference synchronization and [GSM-SECURITY.md](GSM-SECURITY.md) for passive cellular-security observations.
+
+Live console entries include capture-end time (UTC), receiver frequency and decoder name. The latest 500 entries are retained, newest first; use Up/Down or Page Up/Page Down to scroll. Up to three compatible decoders run concurrently, with a 15-second limit per live invocation. Errors and empty results are shown alongside decoded events and diagnostics. These are repeated contiguous windows of up to two seconds / eight million samples, not persistent protocol sessions. Slow decoders skip intervening windows, and messages crossing window boundaries may be missed. Retuning cancels old work and starts fresh captures. Packet-capture-only addons cannot decode raw radio IQ and are skipped.
+
+The live addon feed shares Spectrum's existing radio stream. While listening owns the radio, WFM RDS continues to feed the console, but other addon decoding waits for Spectrum reception to resume. Saved-file runs still place their complete JSON result in Workbench (6) and SQLite history; the rolling console retains 500 entries in memory. Press `s` in that console to start/stop writing new entries to `~/.config/thugsrf/decoder-output-<timestamp>.log` (or the XDG config directory). Each start creates a new private file; entries flush as they arrive and logging continues across retunes. `SAVING` appears in the console title. Clearing the on-screen list does not delete saved logs. The live feed does not continuously write IQ recordings or database entries.

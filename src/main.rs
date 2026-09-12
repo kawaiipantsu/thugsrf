@@ -3,7 +3,9 @@ mod ai;
 mod codec;
 mod config;
 mod dsp;
+mod export;
 mod listening;
+mod live;
 mod radio;
 mod storage;
 mod survey;
@@ -117,7 +119,7 @@ enum Action {
         #[arg(long, default_value_t = 1)]
         seconds: u32,
     },
-    /// Extract envelope pulses or FSK discriminator values.
+    /// Decode FM RDS, envelope pulses, or FSK discriminator values.
     Decode {
         input: PathBuf,
         #[arg(long, default_value = "ook")]

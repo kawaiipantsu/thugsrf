@@ -30,6 +30,8 @@ test: build
 	/usr/bin/python3 scripts/protocol-smoke.py
 	/usr/bin/python3 scripts/reference-smoke.py
 	/usr/bin/python3 scripts/audio-smoke.py
+	/usr/bin/python3 scripts/rds-smoke.py
+	/usr/bin/python3 scripts/live-decoders-smoke.py
 fmt:
 	$(CARGO) fmt --all
 lint:

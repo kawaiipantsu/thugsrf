@@ -33,9 +33,9 @@ shots = [('spectrum-wide','170×50 Spectrum — synthetic demo'),
          ('cli-help','CLI help'), ('settings-wide','Settings — configurable tuning steps'), ('survey-wide','Sequential Survey — passive HackRF acquisition'),
          ('addons-wide','Activatable addon catalog'), ('listen-wide','Listening presets — stopped'),
          ('vhf-uhf-wide','Channel directory — stopped')]
-(DEST/'Screenshots.md').write_text('# Terminal screenshots\n\nActual xterm captures from the application. UI and CLI screenshots show 0.2.1; the passive hardware Survey capture is from 0.2.0.\n\n' + '\n\n'.join(f'## {title}\n\n![{title}](images/{name}.png)' for name,title in shots) + '\n\nReproduce with `xvfb-run -a python3 scripts/screenshots.py` in the main checkout. `--hardware` additionally starts a passive HackRF survey.\n')
+(DEST/'Screenshots.md').write_text('# Terminal screenshots\n\nActual xterm captures from the application. Screenshots illustrate the layout from 0.2.1; the passive hardware Survey capture is from 0.2.0. The 0.3.0 controls and live console are documented in [[Terminal-Manual]] and [[Live-Decoders]].\n\n' + '\n\n'.join(f'## {title}\n\n![{title}](images/{name}.png)' for name,title in shots) + '\n\nReproduce with `xvfb-run -a python3 scripts/screenshots.py` in the main checkout. `--hardware` additionally starts a passive HackRF survey.\n')
 # Walk the actual Clap help tree, including nested subcommands.
-reference = ['# Command reference', 'Generated from `thugsrf 0.2.1 --help`. Global `--frequency` accepts Hz/kHz/MHz/GHz; other numeric options retain the units shown in their help.']
+reference = ['# Command reference', 'Generated from `thugsrf 0.3.0 --help`. Global `--frequency` accepts Hz/kHz/MHz/GHz; other numeric options retain the units shown in their help.']
 def help_tree(args):
     result = subprocess.run([str(BINARY), *args, '--help'], check=True, text=True, capture_output=True).stdout
     reference.append('## '+ ' '.join(['thugsrf', *args])+'\n\n```text\n'+result+'```')
@@ -54,7 +54,7 @@ help_tree([])
 (DEST/'Command-Reference.md').write_text('\n\n'.join(reference)+'\n')
 pages = sorted(p.stem for p in DEST.glob('*.md') if not p.name.startswith('_'))
 (DEST/'_Sidebar.md').write_text('**THUGS(red) RF**\n\n'+'\n'.join(f'- [[{page}]]' for page in ['Home', *[p for p in pages if p!='Home']])+'\n')
-(DEST/'_Footer.md').write_text('[THUGS(red)](https://thugs.red) · [Source](https://github.com/kawaiipantsu/thugsrf) · [Report an issue](https://github.com/kawaiipantsu/thugsrf/issues) · Manual for 0.2.1\n')
+(DEST/'_Footer.md').write_text('[THUGS(red)](https://thugs.red) · [Source](https://github.com/kawaiipantsu/thugsrf) · [Report an issue](https://github.com/kawaiipantsu/thugsrf/issues) · Manual for 0.3.0\n')
 # Ensure internal wiki links and local images resolve before publication.
 for path in DEST.glob('*.md'):
     text = path.read_text()

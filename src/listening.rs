@@ -3,12 +3,15 @@ use crate::config::Config;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
+    io::{BufRead, BufReader},
     process::{Child, Command, Stdio},
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
 pub struct Audio {
     child: Child,
+    rds: Arc<Mutex<serde_json::Map<String, serde_json::Value>>>,
 }
 impl Drop for Audio {
     fn drop(&mut self) {
@@ -41,20 +44,76 @@ impl Audio {
             "CTCSS must be 0 or 60..260 Hz"
         );
         let spec = serde_json::json!({"config":c,"seconds":seconds,"tx":tx,"tone":tone});
-        let child = Command::new("/usr/bin/python3")
-            .args([
-                "-c",
-                include_str!("../scripts/radio-audio.py"),
-                &spec.to_string(),
-            ])
+        let helper = format!(
+            "{}\n{}",
+            include_str!("../addons/_shared/v0_2/rds.py"),
+            include_str!("../scripts/radio-audio.py")
+        );
+        let mut child = Command::new("/usr/bin/python3")
+            .args(["-c", &helper, &spec.to_string()])
             .env("OPENBLAS_NUM_THREADS", "1")
             .env("OMP_NUM_THREADS", "1")
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .context("starting audio worker")?;
-        Ok(Self { child })
+        let rds = Arc::new(Mutex::new(serde_json::Map::new()));
+        let state = Arc::clone(&rds);
+        let output = child.stdout.take().context("audio worker stdout")?;
+        thread::spawn(move || {
+            for line in BufReader::new(output).lines().map_while(Result::ok) {
+                if let Ok(serde_json::Value::Object(event)) = serde_json::from_str(&line)
+                    && let Ok(mut state) = state.lock()
+                {
+                    if event
+                        .get("pi")
+                        .is_some_and(|pi| state.get("pi") != Some(pi))
+                    {
+                        state.clear();
+                    }
+                    for key in [
+                        "pi",
+                        "ps",
+                        "radiotext",
+                        "prog_type",
+                        "tp",
+                        "ta",
+                        "rds_status",
+                    ] {
+                        if let Some(value) = event.get(key) {
+                            state.insert(key.into(), value.clone());
+                        }
+                    }
+                }
+            }
+        });
+        Ok(Self { child, rds })
+    }
+    pub fn rds_summary(&self) -> String {
+        let Ok(state) = self.rds.lock() else {
+            return "RDS unavailable".into();
+        };
+        if let Some(status) = state.get("rds_status").and_then(|v| v.as_str()) {
+            return status.chars().filter(|c| !c.is_control()).collect();
+        }
+        if state.is_empty() {
+            return "RDS: waiting for station data…".into();
+        }
+        let fields: Vec<_> = ["ps", "pi", "prog_type", "radiotext"]
+            .iter()
+            .filter_map(|key| state.get(*key).and_then(|v| v.as_str()))
+            .map(|s| s.chars().filter(|c| !c.is_control()).collect::<String>())
+            .collect();
+        format!(
+            "RDS: {}{}",
+            fields.join(" · "),
+            if state.get("ta").and_then(|v| v.as_bool()) == Some(true) {
+                " · TRAFFIC"
+            } else {
+                ""
+            }
+        )
     }
     pub fn finished(&mut self) -> Result<Option<String>> {
         if let Some(status) = self.child.try_wait()? {
@@ -77,7 +136,11 @@ pub fn run(c: &Config, seconds: u32, tx: bool, tone: f64) -> Result<String> {
     let mut audio = Audio::start(c, seconds, tx, tone)?;
     loop {
         if let Some(s) = audio.finished()? {
-            return Ok(s);
+            return Ok(if c.listen_mode == "wfm" && !tx {
+                format!("{s}\n{}", audio.rds_summary())
+            } else {
+                s
+            });
         }
         if crate::CANCELLED.load(std::sync::atomic::Ordering::Relaxed) {
             return Ok("Audio stopped".into());
@@ -164,7 +227,7 @@ fn validate(rows: &[Channel]) -> Result<()> {
             "invalid TX frequency"
         );
         ensure!(
-            ["am", "fm", "wfm"].contains(&r.mode.as_str())
+            ["am", "fm", "nfm", "wfm"].contains(&r.mode.as_str())
                 && (3000..=200000).contains(&r.bandwidth),
             "invalid mode/bandwidth"
         );

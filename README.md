@@ -69,12 +69,24 @@ The UI fits **80 × 24**, expands with the terminal, and adds a receiver sidebar
 | Space | Start/stop reception, sweep or listening in the selected panel |
 | 7 / 8 / 9 | Wideband Survey / AM-FM Listen / VHF-UHF directory |
 | l | Look up tuned frequency in local reference lists |
-| Tab / Shift-Tab / 1–9 | Switch panels |
+| Tab / Shift-Tab / 1–9 | Cycle all panels / select the first nine |
+| d / D | Open shared live Decoder Console / pause or resume live addons |
+| x (Decoder Console) | Clear the rolling output |
 | p | Freeze display while continuing to drain the receiver |
-| s | Save spectrum and detections to SQLite |
+| s (Spectrum) | Export full-resolution ASCII graph and waterfall to separate files |
+| s (Decoder Console) | Toggle logging to `~/.config/thugsrf/decoder-output-<timestamp>.log` |
+| s (Detections) | Save spectrum and detections to SQLite |
 | r | Prepare a finite recording command |
 | : | Run a CLI command in the workbench |
 | ↑↓, Enter | Select/edit settings or toggle a reviewed addon |
+| [ / ] / mouse wheel (Spectrum) | Zoom out/in around the selected signal; `0` restores full span |
+| Left click (Spectrum/waterfall) | Select frequency and peak measurements; `t` tunes, `l` looks up references |
+| m / b (Spectrum or Listen) | Cycle NFM/FM/WFM/AM presets / enter receive bandwidth |
+| a (Spectrum) | Start/stop listening; spectrum is held during audio |
+| f (Spectrum) | Cycle FFT resolution: 2048 / 8192 / 32768 / 65536 bins |
+| c (Spectrum) | Cycle waterfall palettes |
+| + / - (Spectrum) | Raise/lower waterfall threshold by 5 dB; higher hides weaker signals |
+| Enter (Spectrum) | Enter frequency (e.g. `145.252MHz`); Enter tunes, Esc cancels |
 | ← / → (Spectrum) | Fine tune down/up; default 500 kHz |
 | ↑ / ↓ or PgUp / PgDn (Spectrum) | Coarse tune up/down; default 10 MHz |
 | PgUp / PgDn (other panels) | Scroll output |
@@ -82,13 +94,15 @@ The UI fits **80 × 24**, expands with the terminal, and adds a receiver sidebar
 
 If HackRF exits before delivering any samples with a one-second USB transfer timeout, live reception retries up to three attempts. Other errors and failures after reception starts are shown in full in the Workbench; Space retries manually.
 
+Enable one or more decoders in Addons (4), start Spectrum reception with Space, and press `d` to watch their combined live output. The console labels each entry with decoder, frequency and capture time. `D` pauses/resumes live addon decoding. [Decoder behavior and limits](docs/PROTOCOLS.md).
+
 The command bar supports quoted paths. Jobs execute off the UI thread and stop live reception first to release the radio. The TUI never starts RF transmission on launch. `replay` needs `--confirm-tx` on every invocation.
 
 ## Survey, listening and repeaters
 
 **7 Survey:** sequential HackRF panorama from **1 MHz to 6 GHz**, with coverage and peak hold. The full span is swept; instantaneous capture remains at most about 20 MHz.
 
-**8 Listen:** AM, narrow FM and mono broadcast FM audio, with SW and upper-MW tuning presets. **9 VHF/UHF:** editable RX/TX channel directory, CTCSS TX tones and explicitly confirmed finite microphone transmission. Start listening with Space. [Controls and hardware limits](docs/RADIO.md).
+**8 Listen:** AM, narrow FM and mono broadcast FM audio with optional live RDS station name and RadioText, with SW and upper-MW tuning presets. **9 VHF/UHF:** editable RX/TX channel directory, CTCSS TX tones and explicitly confirmed finite microphone transmission. Start listening with Space. Saved FM IQ/MPX also supports `decode --mode rds`. [Controls and hardware limits](docs/RADIO.md).
 
 **Frequency OSINT:** import saved Danish HTML tables or CSV lists, then press **l** to look up the current frequency. Entries retain source, region and import date. Includes official US/European source links and a small US allocation starter set. [DKScan, FCC/NTIA and EFIS workflow](docs/FREQUENCIES.md).
 

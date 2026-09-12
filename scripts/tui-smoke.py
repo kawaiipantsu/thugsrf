@@ -15,6 +15,7 @@ binary = root / 'target/release/thugsrf'
 with tempfile.TemporaryDirectory(prefix='thugsrf-tui-') as tmp:
     env=dict(os.environ,TERM='xterm-256color',XDG_CONFIG_HOME=tmp+'/config',XDG_DATA_HOME=tmp+'/data')
     subprocess.run([str(binary),'addon','install'],env=env,check=True,capture_output=True)
+    addon_rows=subprocess.check_output([str(binary),'addon','list'],env=env,text=True).splitlines()
     for width,height in [(80,24),(170,50)]:
         master,slave=pty.openpty()
         fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
@@ -32,12 +33,22 @@ with tempfile.TemporaryDirectory(prefix='thugsrf-tui-') as tmp:
         for key in [b'2',b'3',b'4',b'5',b'6',b'7',b'8',b'9',b'1']:
             os.write(master,key);drain(.1)
             if key==b'4':
-                os.write(master,b'\x1b[B'*42);drain(2)
+                os.write(master,b'\x1b[B'*(len(addon_rows)-1));drain(2)
                 # A resize forces a complete redraw; ordinary differential terminal writes may split a label.
                 fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width+1,0,0));drain(.2)
                 fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0));drain(.2)
                 assert b'zigbee-pcap' in output,'last addon was not scrolled into view'
-        os.write(master,b's');drain(.1)
+        os.write(master,b's');drain(.3)
+        graphs=sorted(pathlib.Path(tmp+'/config/thugsrf').glob('spectrum-*.txt'))
+        waterfalls=sorted(pathlib.Path(tmp+'/config/thugsrf').glob('waterfall-*.txt'))
+        assert graphs and waterfalls, 'ASCII exports missing'
+        assert graphs[-1].read_bytes().isascii() and waterfalls[-1].read_bytes().isascii()
+        graph=graphs[-1].read_text().splitlines()
+        rows=[line for line in graph if '|' in line]
+        assert len(rows)==131 and all(len(line)==8198 for line in rows), 'export was reduced to screen width'
+        water=[line for line in waterfalls[-1].read_text().splitlines() if not line.startswith('#')]
+        assert water and all(len(line)==8192 for line in water)
+
         os.write(master,b'q');drain(.3)
         assert p.wait(timeout=5)==0,output[-1000:]
         assert termios.tcgetattr(slave)==before,'terminal mode was not restored'
@@ -45,4 +56,4 @@ with tempfile.TemporaryDirectory(prefix='thugsrf-tui-') as tmp:
         assert 'SYNTHETIC DEMO'.encode() in output if width==170 else True
         pathlib.Path(f'/tmp/thugsrf-tui-{width}x{height}.ansi').write_bytes(output)
         os.close(master);os.close(slave)
-print('PASS: 80x24 and 170x50, demo streaming, all panels, saved report, clean exit and terminal restoration')
+print('PASS: 80x24 and 170x50, demo streaming, all panels, native-bin ASCII exports, clean exit and terminal restoration')

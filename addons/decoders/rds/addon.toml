@@ -1,0 +1,9 @@
+api_version = 1
+name = "rds"
+kind = "decoders"
+description = "Broadcast FM RDS station name, RadioText, PI and programme data"
+command = ["/usr/bin/python3", "decode.py"]
+enabled = false
+timeout_seconds = 120
+formats = ["cs8", "cu8", "wav"]
+requires = ["/usr/bin/python3", "redsea"]

@@ -81,6 +81,32 @@ pub fn toggle(name: &str) -> Result<String> {
     Ok(format!("{} enabled={}", m.name, m.enabled))
 }
 pub fn run(name: &str, request: &serde_json::Value) -> Result<serde_json::Value> {
+    run_inner(name, request, || false, 120)
+}
+
+pub fn run_live(
+    name: &str,
+    request: &serde_json::Value,
+    stop: &std::sync::atomic::AtomicBool,
+    enabled: &std::sync::atomic::AtomicBool,
+) -> Result<serde_json::Value> {
+    run_inner(
+        name,
+        request,
+        || {
+            stop.load(std::sync::atomic::Ordering::Relaxed)
+                || !enabled.load(std::sync::atomic::Ordering::Relaxed)
+        },
+        15,
+    )
+}
+
+fn run_inner(
+    name: &str,
+    request: &serde_json::Value,
+    cancelled: impl Fn() -> bool,
+    max_seconds: u64,
+) -> Result<serde_json::Value> {
     let a = list()?
         .into_iter()
         .find(|a| a.manifest.name == name)
@@ -100,6 +126,7 @@ pub fn run(name: &str, request: &serde_json::Value) -> Result<serde_json::Value>
             a.manifest.formats.join(", ")
         );
     }
+    let timeout_seconds = a.manifest.timeout_seconds.min(max_seconds);
     let mut cmd = Command::new(&a.manifest.command[0]);
     cmd.args(&a.manifest.command[1..])
         .current_dir(a.path.parent().context("addon directory")?)
@@ -130,7 +157,8 @@ pub fn run(name: &str, request: &serde_json::Value) -> Result<serde_json::Value>
             }
         }
         if crate::CANCELLED.load(std::sync::atomic::Ordering::Relaxed)
-            || start.elapsed() > Duration::from_secs(a.manifest.timeout_seconds)
+            || cancelled()
+            || start.elapsed() > Duration::from_secs(timeout_seconds)
         {
             let _ = child.kill();
             let _ = child.wait();
@@ -142,7 +170,7 @@ pub fn run(name: &str, request: &serde_json::Value) -> Result<serde_json::Value>
     // Join only finished I/O workers: a misbehaving descendant must not hold the host hostage.
     while !reader.is_finished() || !writer.is_finished() {
         ensure!(
-            start.elapsed() < Duration::from_secs(a.manifest.timeout_seconds),
+            start.elapsed() < Duration::from_secs(timeout_seconds) && !cancelled(),
             "addon pipe timeout"
         );
         thread::sleep(Duration::from_millis(10));

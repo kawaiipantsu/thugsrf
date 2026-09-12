@@ -1,4 +1,4 @@
-.TH THUGSRF 1 "September 2026" "THUGS(red) RF 0.2.1"
+.TH THUGSRF 1 "September 2026" "THUGS(red) RF 0.3.0"
 .SH NAME
 thugsrf \- modular radio signal intelligence workbench
 .SH SYNOPSIS
@@ -21,8 +21,8 @@ Compute FFT spectra and signal candidates, save to SQLite and optionally export 
 .B scan --start HZ --end HZ --step HZ
 Capture a finite range of center frequencies.
 .TP
-.B decode INPUT --mode ook|fsk
-Extract raw OOK envelope timings or instantaneous frequency.
+.B decode INPUT --mode ook|fsk|rds
+Extract OOK timings, instantaneous frequency, or decode broadcast FM RDS via redsea.
 .TP
 .B addon install|list|enable|disable|toggle|run|run-enabled
 Manage language-neutral executable JSON addons.
@@ -54,7 +54,7 @@ Decode recovered protocol frames to PCAP and a provenance sidecar.
 .B identify INPUT
 Run enabled compatible identifiers concurrently and save their evidence.
 .TP
-.B listen --frequency HZ --mode am|fm|wfm --bandwidth HZ
+.B listen --frequency HZ --mode am|nfm|fm|wfm --bandwidth HZ
 Listen through ALSA. TUI tab 8 provides SW/MW and FM presets.
 .TP
 .B talk --frequency HZ --seconds N --confirm-tx
@@ -76,6 +76,20 @@ Up/Down and Page Up/Page Down tune by coarse_tune_hz (default 10 MHz).
 Edit both steps in Settings. Frequency and step values accept units such as
 145.252MHz or 500kHz; bare integers mean Hz. The global --frequency option
 also accepts these units. Keyboard tuning is session-only.
+.PP
+Enter edits the center frequency. Brackets or the mouse wheel zoom; 0 restores
+full span. Click a peak to select it; t tunes and l looks up its frequency.
+m cycles receive modes; b edits filter width; a toggles listening.
+f cycles FFT resolution. c cycles waterfall colors; +/- adjust its threshold.
+In Spectrum, s exports graph and waterfall to separate ASCII files in the
+config directory, with one column per visible FFT bin.
+.PP
+d opens the live Decoder Console. Enabled compatible decoders run against
+incoming Spectrum sample windows and share timestamped output there.
+D pauses/resumes live addon decoding; x clears the console.
+In the console, s toggles saving new output to decoder-output-<timestamp>.log
+in the thugsrf config directory. Each start creates a new file. Latest 500 entries
+are retained. Slow decoders can skip windows. WFM listening also displays RDS.
 .SH FILES
 ~/.config/thugsrf/config.toml
 .br

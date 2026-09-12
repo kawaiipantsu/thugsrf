@@ -31,3 +31,7 @@ thugsrf history
 ```
 
 This generates and analyzes synthetic symbols without RF transmission. OOK output reports envelope timing; it is not a complete framed protocol message. Continue with [[Investigation-Guide]] for actual captures.
+
+## Live decoding
+
+Enable one or more compatible decoders in Addons (4), return to Spectrum (1), tune the station with Enter, and start RX with Space. Press `d` to see their combined rolling results. Each entry names the decoder, frequency and capture time. `D` pauses/resumes decoding, and `s` toggles a timestamped log file. Read [[Live-Decoders]] for AIS, RDS, saved-file decoding and timing limits.

@@ -22,7 +22,7 @@ Those three fields accept case-insensitive Hz/kHz/MHz/GHz, optional space before
 | rtl_gain | 200 | RTL gain in tenths of dB |
 | serial | empty | Optional device selection string |
 | audio_device | default | ALSA device name |
-| fft_size | 2048 | Power of two, 256–65536 |
+| fft_size | 8192 | Power of two, 256–65536 |
 | threshold_db | 12 | Detection threshold above estimated noise, 0–100 |
 | ai_provider | local | local, openai, anthropic |
 | ai_model | empty | Model name supplied by the user |
@@ -30,7 +30,7 @@ Those three fields accept case-insensitive Hz/kHz/MHz/GHz, optional space before
 | sweep_start_mhz | 1 | Sequential sweep lower bound |
 | sweep_end_mhz | 6000 | Upper bound, above start and at most 6000 |
 | sweep_bin_hz | 1000000 | Bin width, 100000–5000000 Hz |
-| listen_mode | fm | am, fm (narrow), wfm (broadcast mono) |
+| listen_mode | fm | am, nfm, fm, wfm (broadcast mono) |
 | listen_bandwidth | 12500 | 3000–200000 Hz |
 | squelch_dbfs | -65 | Audio squelch, -160–0 dBFS |
 
@@ -43,6 +43,8 @@ Global CLI options override the current invocation without saving. Keyboard tuni
 | .config/thugsrf/config.toml | Settings |
 | .config/thugsrf/decoders/ and identifiers/ | Executable addons and manifests |
 | .config/thugsrf/repeaters.toml | Local channel directory |
+| .config/thugsrf/decoder-output-*.log | Live console logs, toggled with s |
+| .config/thugsrf/spectrum-*.txt and waterfall-*.txt | Full-bin ASCII exports from Spectrum s |
 | .local/share/thugsrf/recordings/ | Default TUI captures |
 | .local/share/thugsrf/investigations.sqlite3 | Reports, findings and AI hypotheses |
 | .local/share/thugsrf/references.sqlite3 | SigID reference cache |
