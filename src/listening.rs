@@ -3,18 +3,42 @@ use crate::config::Config;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     process::{Child, Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, mpsc},
     thread,
     time::Duration,
 };
+/// Fan-out point for raw IQ bytes into a live (stdin-fed) audio worker. Cheap to
+/// hold and poll even when nobody is listening: `push` is a lock + branch, and the
+/// sender is swapped in place so starting/stopping/reconfiguring audio, or a Stream
+/// restart on retune, never requires recreating this handle.
+#[derive(Clone, Default)]
+pub struct AudioFeed(Arc<Mutex<Option<mpsc::SyncSender<Vec<u8>>>>>);
+impl AudioFeed {
+    pub fn push(&self, bytes: &[u8]) {
+        if let Ok(slot) = self.0.lock()
+            && let Some(tx) = slot.as_ref()
+        {
+            let _ = tx.try_send(bytes.to_vec());
+        }
+    }
+    fn set(&self, tx: Option<mpsc::SyncSender<Vec<u8>>>) {
+        if let Ok(mut slot) = self.0.lock() {
+            *slot = tx;
+        }
+    }
+}
 pub struct Audio {
     child: Child,
     rds: Arc<Mutex<serde_json::Map<String, serde_json::Value>>>,
+    live_feed: Option<AudioFeed>,
 }
 impl Drop for Audio {
     fn drop(&mut self) {
+        if let Some(feed) = &self.live_feed {
+            feed.set(None);
+        }
         if self.child.try_wait().ok().flatten().is_some() {
             return;
         }
@@ -25,8 +49,18 @@ impl Drop for Audio {
     }
 }
 impl Audio {
-    pub fn start(c: &Config, seconds: u32, tx: bool, tone: f64) -> Result<Self> {
+    pub fn start(
+        c: &Config,
+        seconds: u32,
+        tx: bool,
+        tone: f64,
+        live: Option<AudioFeed>,
+    ) -> Result<Self> {
         c.validate()?;
+        ensure!(
+            live.is_none() || !tx,
+            "live listening does not support microphone TX"
+        );
         ensure!(
             (1..=3600).contains(&seconds),
             "audio duration must be 1..3600 seconds"
@@ -43,7 +77,7 @@ impl Audio {
             tone == 0.0 || (60.0..=260.0).contains(&tone),
             "CTCSS must be 0 or 60..260 Hz"
         );
-        let spec = serde_json::json!({"config":c,"seconds":seconds,"tx":tx,"tone":tone});
+        let spec = serde_json::json!({"config":c,"seconds":seconds,"tx":tx,"tone":tone,"stdin":live.is_some()});
         let helper = format!(
             "{}\n{}",
             include_str!("../addons/_shared/v0_2/rds.py"),
@@ -53,11 +87,27 @@ impl Audio {
             .args(["-c", &helper, &spec.to_string()])
             .env("OPENBLAS_NUM_THREADS", "1")
             .env("OMP_NUM_THREADS", "1")
-            .stdin(Stdio::null())
+            .stdin(if live.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .context("starting audio worker")?;
+        if let Some(feed) = &live {
+            let mut stdin = child.stdin.take().context("audio worker stdin")?;
+            let (feed_tx, feed_rx) = mpsc::sync_channel::<Vec<u8>>(8);
+            thread::spawn(move || {
+                for bytes in feed_rx {
+                    if stdin.write_all(&bytes).is_err() {
+                        break;
+                    }
+                }
+            });
+            feed.set(Some(feed_tx));
+        }
         let rds = Arc::new(Mutex::new(serde_json::Map::new()));
         let state = Arc::clone(&rds);
         let output = child.stdout.take().context("audio worker stdout")?;
@@ -88,7 +138,11 @@ impl Audio {
                 }
             }
         });
-        Ok(Self { child, rds })
+        Ok(Self {
+            child,
+            rds,
+            live_feed: live,
+        })
     }
     pub fn rds_summary(&self) -> String {
         let Ok(state) = self.rds.lock() else {
@@ -133,7 +187,7 @@ impl Audio {
     }
 }
 pub fn run(c: &Config, seconds: u32, tx: bool, tone: f64) -> Result<String> {
-    let mut audio = Audio::start(c, seconds, tx, tone)?;
+    let mut audio = Audio::start(c, seconds, tx, tone, None)?;
     loop {
         if let Some(s) = audio.finished()? {
             return Ok(if c.listen_mode == "wfm" && !tx {

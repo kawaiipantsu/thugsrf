@@ -57,6 +57,7 @@ struct App {
     survey: Option<crate::survey::Survey>,
     panorama: Option<crate::survey::Panorama>,
     audio: Option<crate::listening::Audio>,
+    audio_feed: crate::listening::AudioFeed,
     report: Option<Report>,
     water: VecDeque<Vec<f32>>,
     waterfall_palette: usize,
@@ -101,6 +102,7 @@ pub fn run(c: Config) -> Result<()> {
         survey: None,
         panorama: None,
         audio: None,
+        audio_feed: crate::listening::AudioFeed::default(),
         report: None,
         water: VecDeque::new(),
         waterfall_palette: 0,
@@ -215,16 +217,32 @@ pub fn run(c: Config) -> Result<()> {
             decoder_line(&mut a, line);
         }
         if let Some(detail) = failure {
+            let was_listening = a.audio.take().is_some();
             a.stream = None;
-            a.status = "Receiver failed · full diagnostics below · Space retries".into();
+            a.status = format!(
+                "Receiver failed · full diagnostics below · Space retries{}",
+                if was_listening {
+                    " · listening stopped"
+                } else {
+                    ""
+                }
+            );
             a.output = format!(
                 "Receiver diagnostics\n\n{detail}\n\nCheck USB connection and whether another application is using the radio.\nPress Space to retry reception."
             );
             a.tab = 5;
             a.scroll = 0;
         } else if disconnected {
+            let was_listening = a.audio.take().is_some();
             a.stream = None;
-            a.status = "Receiver ended · Space restarts reception".into();
+            a.status = format!(
+                "Receiver ended · Space restarts reception{}",
+                if was_listening {
+                    " · listening stopped"
+                } else {
+                    ""
+                }
+            );
         }
         while let Ok(s) = a.job.try_recv() {
             a.busy = false;
@@ -402,31 +420,21 @@ pub fn run(c: Config) -> Result<()> {
                             }
                         }
                     } else if a.tab == 7 || a.tab == 8 {
-                        a.stream = None;
-                        a.survey = None;
-                        if a.audio.is_some() {
-                            a.audio = None;
-                            a.status = "Listening stopped".into();
-                        } else {
-                            match crate::listening::Audio::start(&a.c, 3600, false, 0.0) {
-                                Ok(s) => {
-                                    a.audio = Some(s);
-                                    a.status = format!(
-                                        "Listening {} · {:.6} MHz · Space stops",
-                                        a.c.listen_mode,
-                                        a.c.frequency as f64 / 1e6
-                                    );
-                                }
-                                Err(e) => a.status = e.to_string(),
-                            }
-                        }
+                        toggle_listening(&mut a);
                     } else if a.stream.is_some() {
+                        let was_listening = a.audio.take().is_some();
                         a.stream = None;
-                        a.status = "Receiver stopped".into();
+                        a.status = format!(
+                            "Receiver stopped{}",
+                            if was_listening {
+                                " · listening stopped"
+                            } else {
+                                ""
+                            }
+                        );
                     } else {
                         a.survey = None;
-                        a.audio = None;
-                        match Stream::start(a.c.clone(), a.decoders_enabled) {
+                        match Stream::start(a.c.clone(), a.decoders_enabled, a.audio_feed.clone()) {
                             Ok(s) => {
                                 a.report = None;
                                 a.water.clear();
@@ -579,33 +587,56 @@ pub fn run(c: Config) -> Result<()> {
                     a.input = Some(String::new());
                 }
                 KeyCode::Enter if a.tab == 7 || a.tab == 8 => {
-                    let channels = if a.tab == 7 {
-                        Ok(crate::listening::presets())
+                    if a.busy || a.survey.is_some() {
+                        a.status = "Stop the active job or survey before tuning Listen".into();
                     } else {
-                        crate::listening::channels()
-                    };
-                    match channels {
-                        Ok(rows) if !rows.is_empty() => {
-                            let row = &rows[a.selected % rows.len()];
-                            let mut c = a.c.clone();
-                            c.frequency = row.rx_hz;
-                            c.listen_mode = row.mode.clone();
-                            c.listen_bandwidth = row.bandwidth;
-                            match c.validate() {
-                                Ok(()) => {
-                                    a.audio = None;
-                                    a.stream = None;
-                                    a.survey = None;
-                                    a.audio = None;
-                                    a.survey = None;
-                                    a.c = c;
-                                    a.status = format!("Tuned {} · Space listens", row.name);
+                        let channels = if a.tab == 7 {
+                            Ok(crate::listening::presets())
+                        } else {
+                            crate::listening::channels()
+                        };
+                        match channels {
+                            Ok(rows) if !rows.is_empty() => {
+                                let row = &rows[a.selected % rows.len()];
+                                let mut c = a.c.clone();
+                                c.frequency = row.rx_hz;
+                                c.listen_mode = row.mode.clone();
+                                c.listen_bandwidth = row.bandwidth;
+                                match c.validate() {
+                                    Ok(()) => {
+                                        let name = row.name.clone();
+                                        let was_listening = a.audio.is_some();
+                                        apply_spectrum_config(&mut a, c);
+                                        let mut note = String::new();
+                                        if was_listening {
+                                            match crate::listening::Audio::start(
+                                                &a.c,
+                                                3600,
+                                                false,
+                                                0.,
+                                                Some(a.audio_feed.clone()),
+                                            ) {
+                                                Ok(audio) => a.audio = Some(audio),
+                                                Err(e) => {
+                                                    note = format!(" · listening failed: {e}")
+                                                }
+                                            }
+                                        }
+                                        a.status = format!(
+                                            "Tuned {name} · {}{note}",
+                                            if a.stream.is_some() {
+                                                "live"
+                                            } else {
+                                                "Space starts RX"
+                                            }
+                                        );
+                                    }
+                                    Err(e) => a.status = e.to_string(),
                                 }
-                                Err(e) => a.status = e.to_string(),
                             }
+                            Err(e) => a.status = e.to_string(),
+                            _ => {}
                         }
-                        Err(e) => a.status = e.to_string(),
-                        _ => {}
                     }
                 }
                 KeyCode::Char('t') if a.tab == 8 => {
@@ -891,14 +922,30 @@ fn toggle_listening(a: &mut App) {
     }
     if a.audio.is_some() {
         a.audio = None;
-        a.status = "Listening stopped · Space resumes spectrum".into();
+        a.status = "Listening stopped · spectrum continues".into();
         return;
     }
-    a.stream = None;
-    match crate::listening::Audio::start(&a.c, 3600, false, 0.) {
+    if a.stream.is_none() {
+        match Stream::start(a.c.clone(), a.decoders_enabled, a.audio_feed.clone()) {
+            Ok(stream) => {
+                a.report = None;
+                a.water.clear();
+                a.stream = Some(stream);
+            }
+            Err(e) => {
+                a.status = e.to_string();
+                return;
+            }
+        }
+    }
+    match crate::listening::Audio::start(&a.c, 3600, false, 0., Some(a.audio_feed.clone())) {
         Ok(audio) => {
             a.audio = Some(audio);
-            a.status = "Listening · spectrum held · a stops audio · Space resumes spectrum".into();
+            a.status = format!(
+                "Listening {} · {:.6} MHz · spectrum live · a stops",
+                a.c.listen_mode,
+                a.c.frequency as f64 / 1e6
+            );
         }
         Err(e) => a.status = e.to_string(),
     }
@@ -922,7 +969,7 @@ fn set_listening_config(a: &mut App, next: Config) {
         a.c.listen_bandwidth as f64 / 1000.
     );
     if running {
-        match crate::listening::Audio::start(&a.c, 3600, false, 0.) {
+        match crate::listening::Audio::start(&a.c, 3600, false, 0., Some(a.audio_feed.clone())) {
             Ok(audio) => a.audio = Some(audio),
             Err(e) => a.status = e.to_string(),
         }
@@ -943,8 +990,8 @@ fn tune_spectrum(a: &mut App, step: u64, increase: bool) {
 }
 
 fn set_spectrum_frequency(a: &mut App, frequency: u64) {
-    if a.busy || a.audio.is_some() || a.survey.is_some() {
-        a.status = "Stop the active job, listening or survey before tuning Spectrum".into();
+    if a.busy || a.survey.is_some() {
+        a.status = "Stop the active job or survey before tuning Spectrum".into();
         return;
     }
     if a.c.device == "audio" {
@@ -980,7 +1027,7 @@ fn apply_spectrum_config(a: &mut App, next: Config) {
         }
     );
     if running {
-        match Stream::start(a.c.clone(), a.decoders_enabled) {
+        match Stream::start(a.c.clone(), a.decoders_enabled, a.audio_feed.clone()) {
             Ok(stream) => a.stream = Some(stream),
             Err(e) => a.status = e.to_string(),
         }
@@ -1396,7 +1443,9 @@ fn spectrum(f: &mut Frame, area: Rect, a: &App) {
         }
         if let Some(audio) = &a.audio {
             text = format!(
-                "LISTENING · spectrum held\n{}\n\n{text}",
+                "LISTENING · {} · {:.6} MHz\n{}\n\n{text}",
+                a.c.listen_mode.to_uppercase(),
+                a.c.frequency as f64 / 1e6,
                 if a.c.listen_mode == "wfm" {
                     audio.rds_summary()
                 } else {
@@ -1459,7 +1508,7 @@ fn settings(c: &Config) -> Vec<(String, String)> {
         .collect()
 }
 fn help() -> &'static str {
-    "THUGS(red) RF · Kawaiipantsu · https://thugs.red\n\nSpace starts/stops RX. Demo is explicitly synthetic.\nSpectrum: Enter opens frequency input (e.g. 145.252MHz); Esc cancels.\nSpectrum: [] or mouse wheel zoom, 0 full span; click a peak, t tunes, l looks up frequency.\nReceive: m cycles NFM/FM/WFM/AM; b edits bandwidth; a starts/stops listening.\nWaterfall: f cycles FFT detail (2048–65536 bins); c cycles colors; + raises threshold (hides weak signals), - lowers it.\n←/→ fine tune (500 kHz); ↑/↓ or PgUp/PgDn coarse (10 MHz).\nSettings: fine_tune_hz / coarse_tune_hz change steps; frequency accepts 145.252MHz.\nKeyboard tuning is session-only; Settings saves defaults.\nd opens the rolling Decoder Console; enabled compatible addons try live RX windows.\nD pauses/resumes live addon decoding; s toggles decoder-output-<timestamp>.log saving; x clears console. Up to 3 decoders run concurrently.\nTab cycles all panels; 1–9 select the first nine. 7 Survey, 8 Listen, 9 VHF/UHF. s in Spectrum exports full-bin ASCII graph and waterfall; s in Detections saves SQLite.\nSettings: ↑↓ and Enter to edit any field. Esc cancels edits.\nAddons: ↑↓ and Enter to enable a reviewed addon.\nr prepares a five-second recording; Enter starts it.\n: opens the command bar; commands run on a worker thread.\nRX stops before jobs so hardware is not opened twice.\n\nExample commands (paths containing spaces need quotes):\n  doctor\n  addon install\n  addon enable all --kind identifiers\n  identify /tmp/signal.cs8\n  frequency sources\n  frequency lookup --frequency 145600000\n  record /tmp/signal.cs8 --seconds 5\n  analyze /tmp/signal.cs8 --png /tmp/spectrum.png\n  decode /tmp/signal.cs8 --mode ook\n  decode /tmp/fm.cs8 --mode rds\n  addon run rtl433 /tmp/signal.cs8\n  demod /tmp/signal.cs8 /tmp/audio.wav --mode fm\n  play /tmp/audio.wav\n  encode /tmp/test.wav --bits 10110010 --mode afsk\n  ai --input /tmp/audio.wav --format wav\n  ai --image /tmp/spectrum.png\n  history\n\nAI: set ai_provider, ai_model and local_url in Settings.\nKeys: OPENAI_API_KEY / ANTHROPIC_API_KEY / THUGSRF_LOCAL_API_KEY.\nAI receives measured features for WAV/IQ, or supplied images.\nAI output is a hypothesis. Audio waveforms are not sent directly.\n\nRF replay uses signed 8-bit IQ and requires --confirm-tx.\nAudio playback uses your selected ALSA device.\nUse --help on any command for options.\n"
+    "THUGS(red) RF · Kawaiipantsu · https://thugs.red\n\nSpace starts/stops RX. Demo is explicitly synthetic.\nSpectrum: Enter opens frequency input (e.g. 145.252MHz); Esc cancels.\nSpectrum: [] or mouse wheel zoom, 0 full span; click a peak, t tunes, l looks up frequency.\nReceive: m cycles NFM/FM/WFM/AM; b edits bandwidth; a starts/stops listening (runs alongside Spectrum and follows tuning).\nWaterfall: f cycles FFT detail (2048–65536 bins); c cycles colors; + raises threshold (hides weak signals), - lowers it.\n←/→ fine tune (500 kHz); ↑/↓ or PgUp/PgDn coarse (10 MHz).\nSettings: fine_tune_hz / coarse_tune_hz change steps; frequency accepts 145.252MHz.\nKeyboard tuning is session-only; Settings saves defaults.\nd opens the rolling Decoder Console; enabled compatible addons try live RX windows.\nD pauses/resumes live addon decoding; s toggles decoder-output-<timestamp>.log saving; x clears console. Up to 3 decoders run concurrently.\nTab cycles all panels; 1–9 select the first nine. 7 Survey, 8 Listen, 9 VHF/UHF. s in Spectrum exports full-bin ASCII graph and waterfall; s in Detections saves SQLite.\nSettings: ↑↓ and Enter to edit any field. Esc cancels edits.\nAddons: ↑↓ and Enter to enable a reviewed addon.\nr prepares a five-second recording; Enter starts it.\n: opens the command bar; commands run on a worker thread.\nRX stops before jobs so hardware is not opened twice.\n\nExample commands (paths containing spaces need quotes):\n  doctor\n  addon install\n  addon enable all --kind identifiers\n  identify /tmp/signal.cs8\n  frequency sources\n  frequency lookup --frequency 145600000\n  record /tmp/signal.cs8 --seconds 5\n  analyze /tmp/signal.cs8 --png /tmp/spectrum.png\n  decode /tmp/signal.cs8 --mode ook\n  decode /tmp/fm.cs8 --mode rds\n  addon run rtl433 /tmp/signal.cs8\n  demod /tmp/signal.cs8 /tmp/audio.wav --mode fm\n  play /tmp/audio.wav\n  encode /tmp/test.wav --bits 10110010 --mode afsk\n  ai --input /tmp/audio.wav --format wav\n  ai --image /tmp/spectrum.png\n  history\n\nAI: set ai_provider, ai_model and local_url in Settings.\nKeys: OPENAI_API_KEY / ANTHROPIC_API_KEY / THUGSRF_LOCAL_API_KEY.\nAI receives measured features for WAV/IQ, or supplied images.\nAI output is a hypothesis. Audio waveforms are not sent directly.\n\nRF replay uses signed 8-bit IQ and requires --confirm-tx.\nAudio playback uses your selected ALSA device.\nUse --help on any command for options.\n"
 }
 fn survey_view(f: &mut Frame, area: Rect, a: &App) {
     let parts = Layout::vertical([Constraint::Length(3), Constraint::Min(5)]).split(area);
@@ -1641,6 +1690,7 @@ mod tests {
             survey: None,
             panorama: None,
             audio: None,
+            audio_feed: crate::listening::AudioFeed::default(),
             report: None,
             water: VecDeque::new(),
             waterfall_palette: 0,

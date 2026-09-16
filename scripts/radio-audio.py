@@ -52,14 +52,17 @@ def main():
             sink.stdin.write(out.tobytes());pos+=count
         sink.stdin.close()
     else:
-        if c['device']=='hackrf':
-            args=['hackrf_transfer','-r','-','-f',str(frequency),'-s',str(rate),'-l',str(c['lna_gain']),'-g',str(c['vga_gain']),'-n',str(rate*seconds)]
-            if serial: args+=['-d',serial]
+        if spec.get('stdin'):
+            reader=sys.stdin.buffer
         else:
-            args=['rtl_sdr','-f',str(frequency),'-s',str(rate),'-g',str(c['rtl_gain']/10),'-n',str(rate*seconds)]
-            if serial: args+=['-d',serial]
-            args+=['-']
-        source=spawn(args,stdout=subprocess.PIPE)
+            if c['device']=='hackrf':
+                args=['hackrf_transfer','-r','-','-f',str(frequency),'-s',str(rate),'-l',str(c['lna_gain']),'-g',str(c['vga_gain']),'-n',str(rate*seconds)]
+                if serial: args+=['-d',serial]
+            else:
+                args=['rtl_sdr','-f',str(frequency),'-s',str(rate),'-g',str(c['rtl_gain']/10),'-n',str(rate*seconds)]
+                if serial: args+=['-d',serial]
+                args+=['-']
+            reader=spawn(args,stdout=subprocess.PIPE).stdout
         sink=spawn(['aplay','-q','-D',c['audio_device'],'-t','raw','-f','S16_LE','-c','1','-r','48000'],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL)
         # Cascaded stateful anti-alias filters; integer decimation preserves phase across blocks.
         stages=[]; current=rate
@@ -75,7 +78,7 @@ def main():
         af=dsp.butter(5,15000 if mode=='wfm' else min(4500,c['listen_bandwidth']/2),fs=current,output='sos');ai=np.zeros((len(af),2))
         prev=1+0j; dc=0.; gain=1.; offset=0.; deemphasis=0.
         while True:
-            raw=source.stdout.read(262144)
+            raw=reader.read(262144)
             if not raw: break
             raw=raw[:len(raw)//2*2]
             b=np.frombuffer(raw,dtype=np.int8 if c['device']=='hackrf' else np.uint8).astype(np.float64)

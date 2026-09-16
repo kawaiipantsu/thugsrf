@@ -1,6 +1,7 @@
 use crate::{
     config::Config,
     dsp::{self, Analyzer, Report},
+    listening::AudioFeed,
 };
 use anyhow::{Context, Result, ensure};
 use std::{
@@ -116,7 +117,7 @@ impl Drop for Stream {
     }
 }
 impl Stream {
-    pub fn start(c: Config, decoding: bool) -> Result<Self> {
+    pub fn start(c: Config, decoding: bool, feed: AudioFeed) -> Result<Self> {
         c.validate()?;
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
@@ -156,7 +157,7 @@ impl Stream {
                 if flag.load(Ordering::Relaxed) {
                     return;
                 }
-                let result = receive_attempt(&c, &flag, &tx, &events_tx, &tap);
+                let result = receive_attempt(&c, &flag, &tx, &events_tx, &tap, &feed);
                 if flag.load(Ordering::Relaxed) {
                     return;
                 }
@@ -206,6 +207,7 @@ fn receive_attempt(
     frames: &mpsc::SyncSender<Report>,
     events: &mpsc::Sender<StreamEvent>,
     tap: &crate::live::Tap,
+    feed: &AudioFeed,
 ) -> Result<(bool, String)> {
     let mut child = ChildGuard(
         command(c, "-", None)?
@@ -236,6 +238,7 @@ fn receive_attempt(
     let seen_data = Arc::new(AtomicBool::new(false));
     let reader_seen = seen_data.clone();
     let tap = tap.clone();
+    let feed = feed.clone();
     let reader = thread::spawn(move || -> std::io::Result<()> {
         let mut pending = Vec::new();
         loop {
@@ -253,6 +256,7 @@ fn receive_attempt(
                 }
             }
             tap.push(&bytes, &mut pending);
+            feed.push(&bytes);
             if let Err(mpsc::TrySendError::Disconnected(_)) = raw_tx.try_send(bytes) {
                 return Ok(());
             }

@@ -32,6 +32,19 @@ while True:
     time.sleep(.04)
 ''')
     driver.chmod(0o755)
+    aplay_log = tmp / 'aplay-log'
+    aplay = tmp / 'aplay'
+    aplay.write_text(f'''#!/usr/bin/python3
+import sys
+with open({str(aplay_log)!r}, 'ab') as out:
+    while True:
+        chunk = sys.stdin.buffer.read(4096)
+        if not chunk:
+            break
+        out.write(chunk)
+        out.flush()
+''')
+    aplay.chmod(0o755)
     log = tmp / 'frequencies'
     env = dict(os.environ, TERM='xterm-256color', PATH=str(tmp)+os.pathsep+os.environ['PATH'],
                XDG_CONFIG_HOME=str(tmp/'config'), XDG_DATA_HOME=str(tmp/'data'), TUNE_LOG=str(log))
@@ -87,10 +100,36 @@ while True:
         key(b'\x1b[C')
         assert frequencies() == expected
         assert not pathlib.Path(str(log)+'.overlap').exists()
+        # Concurrent listening: 'a' auto-starts the receiver (spectrum) and streams
+        # IQ into the live audio worker without a second radio process.
+        key(b'a')
+        assert len(frequencies()) == len(expected) + 1, frequencies()
+        listening_freq = frequencies()[-1]
+        time.sleep(.3)
+        drain()
+        assert aplay_log.exists() and aplay_log.stat().st_size > 0, 'audio worker received no IQ'
+        first_size = aplay_log.stat().st_size
+        # Retuning while listening restarts only the receiver (one process, no
+        # overlap); the already-running audio worker keeps flowing across the gap.
+        key(b'\x1b[D')
+        assert frequencies()[-1] == listening_freq - 12500, frequencies()
+        assert not pathlib.Path(str(log)+'.overlap').exists()
+        time.sleep(.3)
+        drain()
+        assert aplay_log.stat().st_size > first_size, 'audio stopped after retune'
+        # Stopping audio leaves the receiver (and spectrum) running untouched.
+        key(b'a')
+        drain()
+        stopped_size = aplay_log.stat().st_size
+        key(b'\x1b[C')
+        assert frequencies()[-1] == listening_freq, frequencies()
+        time.sleep(.2)
+        drain()
+        assert aplay_log.stat().st_size == stopped_size, 'audio kept writing after stop'
         key(b'q')
         assert process.wait(timeout=5) == 0
         assert b'frequency = 145252000' in cli('config').stdout  # session tuning is not persisted
-        print('PASS: Spectrum fine/coarse keys, direct entry, mouse tune, zoom/filter keys, FFT changes, custom steps, live restart without overlap, stopped tuning, persistence')
+        print('PASS: Spectrum fine/coarse keys, direct entry, mouse tune, zoom/filter keys, FFT changes, custom steps, live restart without overlap, stopped tuning, persistence, concurrent listening survives retune without a second radio process')
     finally:
         if process.poll() is None:
             process.kill()

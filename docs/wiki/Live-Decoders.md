@@ -46,6 +46,6 @@ Install the optional redsea backend as described in [[Radio-and-Repeaters]]. IQ 
 
 Up to three decoders run concurrently on contiguous snapshots from the existing radio stream. Windows contain up to two seconds or eight million samples, whichever is smaller, and each live addon invocation has a 15-second deadline. Slow decoders skip windows, and messages split across boundaries can be missed. Unsupported input formats are skipped. Retuning cancels old work before the new receiver starts; previous console entries remain labelled with their original frequency.
 
-Spectrum and live addon decoding share one hardware capture. Audio listening holds the spectrum and pauses the other addon feed; continuous WFM RDS still reaches the console. Space returns to Spectrum reception. The console is not a guaranteed lossless protocol capture; record IQ for reproducible offline analysis.
+Spectrum, live addon decoding and audio listening all share one hardware capture and run concurrently — starting or stopping audio (`a`) no longer pauses the spectrum display or the addon feed. Retuning restarts the underlying receiver briefly, which affects all three the same way. The console is not a guaranteed lossless protocol capture; record IQ for reproducible offline analysis.
 
 For high-resolution ASCII plot exports, press `s` in Spectrum instead. That writes separate graph and waterfall files; see [[Terminal-Manual]].
