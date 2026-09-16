@@ -1,10 +1,12 @@
-THUGS(red) RF 1.0.1 is a bugfix follow-up to 1.0.0's concurrent Spectrum + Listen.
+THUGS(red) RF 1.0.2 fixes an RX front-end gap found while chasing a "noise instead of music" WFM report, and makes gain settings fully controllable.
 
-- The live audio worker's shutdown could raise an unhandled `subprocess.TimeoutExpired` if a child (the ALSA sink) took longer than 10 seconds to exit, crashing the whole session with a raw Python traceback ("exit 1") instead of stopping cleanly. It now force-kills a slow-to-exit child and continues instead of crashing.
-- Audio failures now also persist a timestamped copy of the full diagnostics to `~/.config/thugsrf/logs/audio-<timestamp>.log` (kept across future runs; the newest 20 are retained), in addition to the existing in-session Workbench display. Earlier, a later successful or failed run silently overwrote the one working diagnostics file, so a transient failure could become impossible to find afterward.
-- Removed two leftover "spectrum held while listening" status strings in the TUI (Spectrum tab status line and sidebar) that were never updated when 1.0.0 stopped holding the spectrum display during listening.
-- If you see `RuntimeError: hackrf_transfer exited 1` with "Couldn't transfer any bytes for one second" in the Workbench diagnostics after pressing `a`, that specific message means the audio worker opened its own receiver instead of tapping the already-running one — a symptom of running a build older than 1.0.0's concurrent-listening change. Confirm with `thugsrf --version` and `type -a thugsrf` (an older `/usr/local/bin/thugsrf` ahead of a packaged `/usr/bin/thugsrf` on PATH is the usual cause).
+- The receive path (Spectrum, Listen, `record`, `scan`, `listen`/`talk`) never explicitly commanded the HackRF's RF amplifier state, leaving it at whatever a previous tool or session left it in. It's now explicit every time, and controllable: a new `amp_enable` setting (off by default, editable in Settings or via `thugsrf config set amp_enable true`) replaces the implicit, undefined prior state. HackRF's own LNA/VGA gains already provide RX gain; the amp mainly matters for weak/distant signals and otherwise increases overload risk.
+- `lna_gain`'s default moves from 16 to 32 dB for new installations, matching common HackRF reception guidance (existing saved configurations are untouched).
+- Fixed a live-audio correctness bug: a read from the IQ pipe could occasionally return an odd number of bytes; the trailing byte was silently dropped instead of carried into the next read, permanently desyncing every I/Q pair for the rest of the session.
+- Removed three more leftover "spectrum held"/"tuning blocked while listening" descriptions in `docs/RADIO.md` that 1.0.0 missed.
 
-Validation: `cargo test`, strict Clippy, and the full smoke suite (including the PTY concurrent-listening scenario from 1.0.0) all pass unchanged. These changes were not validated with over-the-air reception; no RF transmission was performed.
+If you're chasing noisy or garbled audio on a real station: try `thugsrf config set amp_enable false` explicitly (now the default) and `thugsrf config set lna_gain 32`, then retune. If a signal is very weak, `amp_enable true` adds roughly 14 dB at the cost of dynamic range on strong nearby signals.
 
-Install the Debian package and restart the TUI. No configuration changes are required.
+Validation: `cargo test`, strict Clippy, and the full smoke suite all pass. The amp/gain changes were checked against a real HackRF with real over-the-air FM broadcast reception (captured IQ, confirmed a genuine strong signal via spectrum analysis, compared output statistics). No RF transmission was performed.
+
+Install the Debian package and restart the TUI. No configuration changes are required; `amp_enable` appears with its default value on existing configurations automatically.

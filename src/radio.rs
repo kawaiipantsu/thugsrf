@@ -34,6 +34,10 @@ pub fn command(c: &Config, output: &str, count: Option<u64>) -> Result<Command> 
                 &c.lna_gain.to_string(),
                 "-g",
                 &c.vga_gain.to_string(),
+                // Always explicit: never inherit the amp's prior hardware state
+                // from another tool or session.
+                "-a",
+                if c.amp_enable { "1" } else { "0" },
             ]);
             if !c.serial.is_empty() {
                 cmd.args(["-d", &c.serial]);

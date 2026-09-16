@@ -56,7 +56,7 @@ def main():
             reader=sys.stdin.buffer
         else:
             if c['device']=='hackrf':
-                args=['hackrf_transfer','-r','-','-f',str(frequency),'-s',str(rate),'-l',str(c['lna_gain']),'-g',str(c['vga_gain']),'-n',str(rate*seconds)]
+                args=['hackrf_transfer','-r','-','-f',str(frequency),'-s',str(rate),'-l',str(c['lna_gain']),'-g',str(c['vga_gain']),'-a','1' if c.get('amp_enable') else '0','-n',str(rate*seconds)]
                 if serial: args+=['-d',serial]
             else:
                 args=['rtl_sdr','-f',str(frequency),'-s',str(rate),'-g',str(c['rtl_gain']/10),'-n',str(rate*seconds)]
@@ -76,11 +76,17 @@ def main():
                 print(json.dumps({'rds_status':str(exc)}),flush=True)
         chan=dsp.butter(6,min(c['listen_bandwidth']/2,current*0.45),fs=current,output='sos');ci=np.zeros((len(chan),2),complex)
         af=dsp.butter(5,15000 if mode=='wfm' else min(4500,c['listen_bandwidth']/2),fs=current,output='sos');ai=np.zeros((len(af),2))
-        prev=1+0j; dc=0.; gain=1.; offset=0.; deemphasis=0.
+        prev=1+0j; dc=0.; gain=1.; offset=0.; deemphasis=0.; carry=b''
         while True:
-            raw=reader.read(262144)
-            if not raw: break
-            raw=raw[:len(raw)//2*2]
+            chunk=reader.read(262144)
+            if not chunk: break
+            raw=carry+chunk
+            # A read() on a pipe can split an I/Q byte pair; carry a lone trailing
+            # byte to the next read instead of dropping it, which would otherwise
+            # permanently swap I and Q for the rest of the session.
+            if len(raw)%2: carry=raw[-1:];raw=raw[:-1]
+            else: carry=b''
+            if not raw: continue
             b=np.frombuffer(raw,dtype=np.int8 if c['device']=='hackrf' else np.uint8).astype(np.float64)
             if c['device']=='rtl': b-=127.5
             iq=(b[0::2]+1j*b[1::2])/128

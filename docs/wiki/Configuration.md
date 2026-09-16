@@ -17,8 +17,9 @@ Those three fields accept case-insensitive Hz/kHz/MHz/GHz, optional space before
 | fine_tune_hz | 500000 | Left/Right Spectrum step; 1 Hz–6 GHz |
 | coarse_tune_hz | 10000000 | Up/Down and Page keys Spectrum step; 1 Hz–6 GHz |
 | sample_rate | 8000000 | Samples/s; HackRF 8–20M, RTL supported ranges, audio 8k–192k |
-| lna_gain | 16 | HackRF dB, 0–40 in steps of 8 |
+| lna_gain | 32 | HackRF dB, 0–40 in steps of 8 |
 | vga_gain | 20 | HackRF dB, 0–62 in steps of 2 |
+| amp_enable | false | HackRF RF front-end preamp (~14 dB); off avoids overloading on strong signals |
 | rtl_gain | 200 | RTL gain in tenths of dB |
 | serial | empty | Optional device selection string |
 | audio_device | default | ALSA device name |

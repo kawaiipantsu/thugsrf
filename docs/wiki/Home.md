@@ -4,7 +4,7 @@
 
 A Linux radio investigation workbench by **Kawaiipantsu from THUGS(red)**, a Danish hacking community. [Community](https://thugs.red) · [Source](https://github.com/kawaiipantsu/thugsrf) · [Downloads](https://github.com/kawaiipantsu/thugsrf/releases)
 
-This manual describes **1.0.1**. Begin with [[Installation]], then [[Quick-Start]] and [[Terminal-Manual]]. For a complete investigation follow [[Investigation-Guide]].
+This manual describes **1.0.2**. Begin with [[Installation]], then [[Quick-Start]] and [[Terminal-Manual]]. For a complete investigation follow [[Investigation-Guide]].
 
 ![Spectrum in a large terminal, synthetic demo](images/spectrum-wide.png)
 

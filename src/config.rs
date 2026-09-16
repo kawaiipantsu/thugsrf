@@ -12,6 +12,7 @@ pub struct Config {
     pub sample_rate: u32,
     pub lna_gain: u32,
     pub vga_gain: u32,
+    pub amp_enable: bool,
     pub rtl_gain: u32,
     pub serial: String,
     pub audio_device: String,
@@ -35,8 +36,9 @@ impl Default for Config {
             fine_tune_hz: 500_000,
             coarse_tune_hz: 10_000_000,
             sample_rate: 8_000_000,
-            lna_gain: 16,
+            lna_gain: 32,
             vga_gain: 20,
+            amp_enable: false,
             rtl_gain: 200,
             serial: String::new(),
             audio_device: "default".into(),
@@ -239,6 +241,7 @@ impl Config {
             }
             toml::Value::Integer(_) => toml::Value::Integer(value.parse()?),
             toml::Value::Float(_) => toml::Value::Float(value.parse()?),
+            toml::Value::Boolean(_) => toml::Value::Boolean(value.parse()?),
             _ => toml::Value::String(value.into()),
         };
         let next: Self = t.try_into()?;

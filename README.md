@@ -127,7 +127,7 @@ thugsrf scan --start 433000000 --end 435000000 --step 1000000 --seconds 1
 | ALSA sound card | S16 mono capture / WAV files | Live audio spectrum, recording, WAV playback, AFSK generation |
 | Demo | Synthetic complex samples | UI exploration without hardware |
 
-Rates are in **Hz**; the global frequency option also accepts units such as `145.252MHz`, gains in dB (the `rtl_gain` setting uses tenths of a dB). Hardware limits still depend on the tuner, USB controller and firmware. HackRF's RF amplifier remains off by default. Its 8–20 MS/s operating range follows [HackRF's sampling/filter guidance](https://hackrf.readthedocs.io/en/stable/sampling_rate.html). The NESDR SMArTee has a powered bias tee: use compatible antennas/accessories.
+Rates are in **Hz**; the global frequency option also accepts units such as `145.252MHz`, gains in dB (the `rtl_gain` setting uses tenths of a dB). Hardware limits still depend on the tuner, USB controller and firmware. HackRF's RF amplifier is off by default; enable it via the `amp_enable` setting if a signal is too weak, but it usually isn't needed and raises overload risk on strong signals. Its 8–20 MS/s operating range follows [HackRF's sampling/filter guidance](https://hackrf.readthedocs.io/en/stable/sampling_rate.html). The NESDR SMArTee has a powered bias tee: use compatible antennas/accessories.
 
 Recordings never silently overwrite files. RF recordings receive a SigMF-style `.sigmf-meta` sidecar; the raw recording retains your chosen filename. Audio recordings receive a `.wav.json` metadata sidecar, described in `docs/ARCHITECTURE.md`. A finite scan retains each capture and stores its report. Scan steps are center frequencies; overlapping captures are expected when the step is smaller than sample rate.
 
