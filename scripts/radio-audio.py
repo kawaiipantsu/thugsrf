@@ -113,7 +113,11 @@ def main():
             sink.stdin.write(np.clip(output*32767,-32767,32767).astype('<i2').tobytes())
         sink.stdin.close()
     for p in children:
-        if p.wait(timeout=10): raise RuntimeError(f"{p.args[0]} exited {p.returncode}")
+        try:
+            code=p.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            p.kill();p.wait();continue
+        if code: raise RuntimeError(f"{p.args[0]} exited {code}")
 try:
     main()
 except SystemExit: pass

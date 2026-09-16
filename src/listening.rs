@@ -172,11 +172,17 @@ impl Audio {
     pub fn finished(&mut self) -> Result<Option<String>> {
         if let Some(status) = self.child.try_wait()? {
             let path = crate::config::data_dir().join("audio.log");
-            ensure!(
-                status.success(),
-                "Audio failed ({status})\n{}",
-                std::fs::read_to_string(&path).unwrap_or_default()
-            );
+            let diagnostics = std::fs::read_to_string(&path).unwrap_or_default();
+            if !status.success() {
+                let saved = crate::config::save_log("audio", &diagnostics);
+                let note = saved.map_or_else(String::new, |p| {
+                    format!(
+                        "\n\nAlso saved to {} (kept across future runs)",
+                        p.display()
+                    )
+                });
+                anyhow::bail!("Audio failed ({status})\n{diagnostics}{note}");
+            }
             Ok(Some(format!(
                 "Audio ended; diagnostics: {}",
                 path.display()

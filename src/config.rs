@@ -60,6 +60,40 @@ pub fn config_dir() -> PathBuf {
 pub fn data_dir() -> PathBuf {
     base("XDG_DATA_HOME", ".local/share").join("thugsrf")
 }
+/// Durable failure diagnostics, kept across runs; unlike `data_dir()`'s working
+/// files (e.g. audio.log), which a later run truncates and overwrites.
+pub fn log_dir() -> PathBuf {
+    config_dir().join("logs")
+}
+/// Persist `content` as a timestamped `<kind>-<unix ms>.log` under `log_dir()`,
+/// pruning older files of the same kind beyond the newest 20 so this never grows
+/// unbounded. Best-effort: a write failure here must never mask the real error.
+pub fn save_log(kind: &str, content: &str) -> Option<PathBuf> {
+    let dir = log_dir();
+    fs::create_dir_all(&dir).ok()?;
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let path = dir.join(format!("{kind}-{millis}.log"));
+    fs::write(&path, content).ok()?;
+    let prefix = format!("{kind}-");
+    if let Ok(entries) = fs::read_dir(&dir) {
+        let mut own: Vec<_> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_str()
+                    .is_some_and(|n| n.starts_with(&prefix))
+            })
+            .collect();
+        own.sort_by_key(std::fs::DirEntry::file_name);
+        for stale in own.iter().rev().skip(20) {
+            let _ = fs::remove_file(stale.path());
+        }
+    }
+    Some(path)
+}
 fn base(var: &str, fallback: &str) -> PathBuf {
     std::env::var_os(var)
         .map(PathBuf::from)

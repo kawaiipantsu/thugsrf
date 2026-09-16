@@ -1287,15 +1287,11 @@ fn draw(f: &mut Frame, a: &App) {
     } else {
         if a.tab == 0 {
             if let Some(audio) = &a.audio {
-                format!(
-                    "{}\n{}",
-                    a.status,
-                    if a.c.listen_mode == "wfm" {
-                        audio.rds_summary()
-                    } else {
-                        "Spectrum held while listening".into()
-                    }
-                )
+                if a.c.listen_mode == "wfm" {
+                    format!("{}\n{}", a.status, audio.rds_summary())
+                } else {
+                    format!("● {}", a.status)
+                }
             } else if let Some(details) = selected_signal(a) {
                 format!(
                     "{}\n{}",

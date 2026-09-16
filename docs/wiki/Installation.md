@@ -5,7 +5,7 @@
 Download the amd64 `.deb` from [Releases](https://github.com/kawaiipantsu/thugsrf/releases), then install the downloaded file:
 
 ```sh
-sudo apt install ./thugsrf_1.0.0_amd64.deb
+sudo apt install ./thugsrf_1.0.1_amd64.deb
 thugsrf --version
 thugsrf doctor
 thugsrf addon install
@@ -25,7 +25,7 @@ make build
 make check
 make test
 make deb
-sudo apt install ./dist/thugsrf_1.0.0_amd64.deb
+sudo apt install ./dist/thugsrf_1.0.1_amd64.deb
 ```
 
 The pinned toolchain and Cargo.lock define reproducible dependency versions. `make install` uses `/usr/local` by default; `PREFIX=/usr` and `DESTDIR=/tmp/stage` support staging. Avoid leaving an older `/usr/local/bin/thugsrf` ahead of a packaged `/usr/bin/thugsrf`; check `type -a thugsrf`.
